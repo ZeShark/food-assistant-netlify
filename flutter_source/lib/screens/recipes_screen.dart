@@ -15,13 +15,38 @@ class _RecipesScreenState extends State<RecipesScreen> {
   String _recipeSuggestions = '';
   bool _isLoadingSuggestions = false;
   
+  // Enhanced cuisine list with countries
   final List<String> cuisines = [
-    'Italian', 'Mexican', 'Asian', 'Indian', 'Mediterranean', 'American'
+    'Any cuisine',
+    'Italian', 'French', 'Spanish', 'Greek', 'Mediterranean',
+    'Mexican', 'Brazilian', 'Peruvian', 'Argentinian',
+    'Chinese', 'Japanese', 'Thai', 'Vietnamese', 'Indian', 'Korean',
+    'American', 'British', 'German', 'Middle Eastern',
+    'African', 'Caribbean', 'Thai', 'Moroccan'
   ];
   
+  // Enhanced time options
   final List<String> times = [
-    '15 minutes', '30 minutes', '1 hour', '2 hours'
+    'Quick (under 30 min)',
+    'Medium (30-60 min)', 
+    'Long (1-2 hours)',
+    'Time doesn\'t matter',
+    'Very quick (under 15 min)'
   ];
+
+  // Appliances selection
+  final Map<String, bool> _appliances = {
+    'Oven': true,
+    'Stovetop': true,
+    'Microwave': true,
+    'Blender': true,
+    'Air Fryer': false,
+    'Slow Cooker': false,
+    'Pressure Cooker': false,
+    'Grill': false,
+    'Food Processor': false,
+    'Stand Mixer': false,
+  };
 
   Future<void> _getRecipeSuggestions(BuildContext context) async {
     final appState = context.read<FoodAppState>();
@@ -32,9 +57,16 @@ class _RecipesScreenState extends State<RecipesScreen> {
     });
 
     try {
+      // Get selected appliances
+      final selectedAppliances = _appliances.entries
+          .where((entry) => entry.value)
+          .map((entry) => entry.key)
+          .toList();
+
       final suggestions = await appState.getRecipeSuggestions(
-        cuisine: _selectedCuisine,
+        cuisine: _selectedCuisine == 'Any cuisine' ? null : _selectedCuisine,
         time: _selectedTime,
+        appliances: selectedAppliances,
       );
       
       setState(() {
@@ -51,6 +83,43 @@ class _RecipesScreenState extends State<RecipesScreen> {
     }
   }
 
+  Widget _getCategoryIcon(String? category) {
+    final cat = category?.toLowerCase() ?? 'uncategorized';
+    switch (cat) {
+      case 'vegetable':
+        return const Icon(Icons.eco, color: Colors.green, size: 16);
+      case 'fruit':
+        return const Icon(Icons.apple, color: Colors.red, size: 16);
+      case 'meat':
+      case 'poultry':
+        return const Icon(Icons.set_meal, color: Colors.brown, size: 16);
+      case 'seafood':
+        return const Icon(Icons.waves, color: Colors.blue, size: 16);
+      case 'dairy':
+        return const Icon(Icons.local_drink, color: Colors.yellow, size: 16);
+      case 'grains':
+        return const Icon(Icons.grain, color: Colors.orange, size: 16);
+      case 'spices':
+      case 'herbs':
+        return const Icon(Icons.spa, color: Colors.purple, size: 16);
+      case 'oils':
+      case 'condiments':
+        return const Icon(Icons.opacity, color: Colors.amber, size: 16);
+      case 'beverages':
+        return const Icon(Icons.local_cafe, color: Colors.brown, size: 16);
+      case 'frozen':
+        return const Icon(Icons.ac_unit, color: Colors.blue, size: 16);
+      case 'canned':
+        return const Icon(Icons.inventory_2, color: Colors.orange, size: 16);
+      case 'bakery':
+        return const Icon(Icons.bakery_dining, color: Colors.brown, size: 16);
+      case 'snacks':
+        return const Icon(Icons.cookie, color: Colors.orange, size: 16);
+      default:
+        return const Icon(Icons.kitchen, color: Colors.grey, size: 16);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<FoodAppState>();
@@ -61,7 +130,7 @@ class _RecipesScreenState extends State<RecipesScreen> {
       ),
       body: Column(
         children: [
-          // Filters
+          // Filters Card
           Card(
             margin: const EdgeInsets.all(16),
             child: Padding(
@@ -70,23 +139,22 @@ class _RecipesScreenState extends State<RecipesScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Filters',
+                    'Recipe Filters',
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 16),
+                  
+                  // Cuisine Dropdown
                   DropdownButtonFormField<String>(
-                    initialValue: _selectedCuisine,
+                    value: _selectedCuisine,
                     decoration: const InputDecoration(
-                      labelText: 'Cuisine',
+                      labelText: 'Cuisine Type',
                       border: OutlineInputBorder(),
                     ),
-                    items: [
-                      const DropdownMenuItem(value: null, child: Text('Any cuisine')),
-                      ...cuisines.map((cuisine) => DropdownMenuItem(
-                        value: cuisine,
-                        child: Text(cuisine),
-                      )),
-                    ],
+                    items: cuisines.map((cuisine) => DropdownMenuItem(
+                      value: cuisine,
+                      child: Text(cuisine),
+                    )).toList(),
                     onChanged: (value) {
                       setState(() {
                         _selectedCuisine = value;
@@ -94,19 +162,18 @@ class _RecipesScreenState extends State<RecipesScreen> {
                     },
                   ),
                   const SizedBox(height: 16),
+                  
+                  // Time Dropdown
                   DropdownButtonFormField<String>(
-                    initialValue: _selectedTime,
+                    value: _selectedTime,
                     decoration: const InputDecoration(
                       labelText: 'Cooking Time',
                       border: OutlineInputBorder(),
                     ),
-                    items: [
-                      const DropdownMenuItem(value: null, child: Text('Any time')),
-                      ...times.map((time) => DropdownMenuItem(
-                        value: time,
-                        child: Text(time),
-                      )),
-                    ],
+                    items: times.map((time) => DropdownMenuItem(
+                      value: time,
+                      child: Text(time),
+                    )).toList(),
                     onChanged: (value) {
                       setState(() {
                         _selectedTime = value;
@@ -114,6 +181,31 @@ class _RecipesScreenState extends State<RecipesScreen> {
                     },
                   ),
                   const SizedBox(height: 16),
+                  
+                  // Appliances Section
+                  const Text(
+                    'Available Appliances:',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: _appliances.entries.map((entry) {
+                      return FilterChip(
+                        label: Text(entry.key),
+                        selected: entry.value,
+                        onSelected: (selected) {
+                          setState(() {
+                            _appliances[entry.key] = selected;
+                          });
+                        },
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 16),
+                  
+                  // Get Suggestions Button
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
@@ -154,7 +246,7 @@ class _RecipesScreenState extends State<RecipesScreen> {
               ),
             ),
           
-          // Current ingredients preview
+          // Current ingredients preview with icons
           Expanded(
             child: appState.ingredients.isEmpty
                 ? const Center(
@@ -187,9 +279,13 @@ class _RecipesScreenState extends State<RecipesScreen> {
                           itemBuilder: (context, index) {
                             final ingredient = appState.ingredients[index];
                             return ListTile(
-                              leading: const Icon(Icons.kitchen),
+                              leading: _getCategoryIcon(ingredient['category']),
                               title: Text(ingredient['name']),
                               subtitle: Text('Category: ${ingredient['category'] ?? 'uncategorized'}'),
+                              trailing: Text(
+                                '${ingredient['quantity'] ?? 1} ${ingredient['unit'] ?? 'unit'}',
+                                style: const TextStyle(color: Colors.grey),
+                              ),
                             );
                           },
                         ),

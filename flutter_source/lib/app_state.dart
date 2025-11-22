@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 
 class FoodAppState extends ChangeNotifier {
-  static const String baseUrl = 'http://192.168.0.166:3000';
+  static const String baseUrl = 'https://foodassistant.netlify.app/api';
   
   List<dynamic> _ingredients = [];
   List<dynamic> get ingredients => _ingredients;
@@ -48,7 +48,7 @@ class FoodAppState extends ChangeNotifier {
       );
       
       if (response.statusCode == 200) {
-        await loadIngredients(); // Reload the list
+        await loadIngredients();
       }
     } catch (e) {
       if (kDebugMode) {
@@ -56,6 +56,44 @@ class FoodAppState extends ChangeNotifier {
       }
     }
   }
+
+  // Update ingredient
+Future<void> updateIngredient(String id, {String? name, String? category}) async {
+  try {
+    // Update local state immediately for better UX
+    final index = _ingredients.indexWhere((ing) => ing['id'].toString() == id);
+    if (index != -1) {
+      // Create a copy to avoid direct mutation
+      final updatedIngredients = List<dynamic>.from(_ingredients);
+      if (name != null) updatedIngredients[index]['name'] = name;
+      if (category != null) updatedIngredients[index]['category'] = category;
+      
+      _ingredients = updatedIngredients;
+      notifyListeners(); // This triggers UI updates
+    }
+
+    // Send update to server
+    final response = await http.put(
+      Uri.parse('$baseUrl/ingredients/$id'),
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode({
+        if (name != null) 'name': name,
+        if (category != null) 'category': category,
+      }),
+    );
+    
+    if (response.statusCode != 200) {
+      // If server update failed, revert local changes
+      await loadIngredients();
+    }
+  } catch (e) {
+    if (kDebugMode) {
+      print('Error updating ingredient: $e');
+    }
+    // Revert local changes if update failed
+    await loadIngredients();
+  }
+}
 
   // Delete ingredient
   Future<void> deleteIngredient(String id) async {
@@ -120,7 +158,12 @@ class FoodAppState extends ChangeNotifier {
   }
 
   // Get recipe suggestions
-  Future<String> getRecipeSuggestions({String? cuisine, String? diet, String? time}) async {
+  Future<String> getRecipeSuggestions({
+    String? cuisine, 
+    String? diet, 
+    String? time,
+    List<String>? appliances,
+  }) async {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/recipes/suggest'),
@@ -129,16 +172,18 @@ class FoodAppState extends ChangeNotifier {
           'cuisine': cuisine,
           'diet': diet,
           'time': time,
+          'appliances': appliances,
         }),
       );
       
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        return data['suggestions'];
+        return data['suggestions'] ?? 'No suggestions available';
+      } else {
+        return 'Failed to get suggestions: ${response.statusCode}';
       }
-      return 'Failed to get suggestions';
     } catch (e) {
-      return 'Error connecting to recipe service';
+      return 'Error connecting to recipe service: $e';
     }
   }
 }
