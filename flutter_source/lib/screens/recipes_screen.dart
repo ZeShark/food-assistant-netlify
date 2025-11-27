@@ -12,8 +12,8 @@ class RecipesScreen extends StatefulWidget {
 class _RecipesScreenState extends State<RecipesScreen> {
   String? _selectedCuisine;
   String? _selectedTime;
-  String _recipeSuggestions = '';
-  bool _isLoadingSuggestions = false;
+  String _generatedRecipe = '';
+  bool _isGenerating = false;
   
   // Enhanced cuisine list with countries
   final List<String> cuisines = [
@@ -48,39 +48,91 @@ class _RecipesScreenState extends State<RecipesScreen> {
     'Stand Mixer': false,
   };
 
-  Future<void> _getRecipeSuggestions(BuildContext context) async {
+  Future<void> _generateRecipe(BuildContext context) async {
     final appState = context.read<FoodAppState>();
     
     setState(() {
-      _isLoadingSuggestions = true;
-      _recipeSuggestions = '';
+      _isGenerating = true;
+      _generatedRecipe = '';
     });
 
     try {
+      // Get current ingredients from app state
+      final currentIngredients = appState.ingredients
+          .map((ing) => ing['name'].toString())
+          .toList();
+
       // Get selected appliances
       final selectedAppliances = _appliances.entries
           .where((entry) => entry.value)
           .map((entry) => entry.key)
           .toList();
 
-      final suggestions = await appState.getRecipeSuggestions(
-        cuisine: _selectedCuisine == 'Any cuisine' ? null : _selectedCuisine,
+      final result = await appState.getRecipeSuggestions(
+        cuisine: _selectedCuisine,
+        diet: null, // Your original code didn't have diet
         time: _selectedTime,
         appliances: selectedAppliances,
+        ingredients: currentIngredients,
       );
-      
-      setState(() {
-        _recipeSuggestions = suggestions;
-      });
+
+      if (result['success'] == true && result['recipe'] != null) {
+        final recipe = result['recipe'];
+        // Display the full recipe instead of just text
+        setState(() {
+          _generatedRecipe = '''
+Title: ${recipe['title']}
+
+Description: ${recipe['description'] ?? 'No description available'}
+
+Ingredients:
+${_formatIngredients(recipe['ingredients'])}
+
+Instructions:
+${_formatInstructions(recipe['instructions'])}
+
+Cooking Time: ${recipe['cookingTime'] ?? 'Not specified'}
+Difficulty: ${recipe['difficulty'] ?? 'Not specified'}
+''';
+        });
+      } else {
+        setState(() {
+          _generatedRecipe = 'Error: ${result['error']}';
+        });
+      }
     } catch (e) {
       setState(() {
-        _recipeSuggestions = 'Error getting suggestions: $e';
+        _generatedRecipe = 'Error generating recipe: $e';
       });
     } finally {
       setState(() {
-        _isLoadingSuggestions = false;
+        _isGenerating = false;
       });
     }
+  }
+
+  String _formatIngredients(dynamic ingredients) {
+    if (ingredients == null) return 'No ingredients listed';
+    if (ingredients is List) {
+      return ingredients.map((ing) {
+        if (ing is Map) {
+          return '• ${ing['name'] ?? 'Unknown'}: ${ing['amount'] ?? 'Some'}';
+        } else {
+          return '• $ing';
+        }
+      }).join('\n');
+    }
+    return 'No ingredients listed';
+  }
+
+  String _formatInstructions(dynamic instructions) {
+    if (instructions == null) return 'No instructions available';
+    if (instructions is List) {
+      return instructions.asMap().entries.map((entry) {
+        return '${entry.key + 1}. ${entry.value}';
+      }).join('\n');
+    }
+    return 'No instructions available';
   }
 
   Widget _getCategoryIcon(String? category) {
@@ -209,10 +261,10 @@ class _RecipesScreenState extends State<RecipesScreen> {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: appState.ingredients.isEmpty || _isLoadingSuggestions 
+                      onPressed: appState.ingredients.isEmpty || _isGenerating 
                           ? null 
-                          : () => _getRecipeSuggestions(context),
-                      child: _isLoadingSuggestions
+                          : () => _generateRecipe(context),
+                      child: _isGenerating
                           ? const SizedBox(
                               height: 20,
                               width: 20,
@@ -227,7 +279,7 @@ class _RecipesScreenState extends State<RecipesScreen> {
           ),
           
           // Recipe Suggestions Display
-          if (_recipeSuggestions.isNotEmpty)
+          if (_generatedRecipe.isNotEmpty)
             Card(
               margin: const EdgeInsets.symmetric(horizontal: 16),
               child: Padding(
@@ -236,11 +288,11 @@ class _RecipesScreenState extends State<RecipesScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'Recipe Suggestions:',
+                      'Generated Recipe:',
                       style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 12),
-                    Text(_recipeSuggestions),
+                    Text(_generatedRecipe),
                   ],
                 ),
               ),

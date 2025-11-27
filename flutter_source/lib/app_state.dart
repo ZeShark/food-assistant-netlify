@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 
 class FoodAppState extends ChangeNotifier {
-  static const String baseUrl = 'https://foodassistant.netlify.app/api';
+  static const String baseUrl = '/api';
   
   List<dynamic> _ingredients = [];
   List<dynamic> get ingredients => _ingredients;
@@ -15,12 +15,19 @@ class FoodAppState extends ChangeNotifier {
   bool get isLoading => _isLoading;
 
   // Load ingredients from backend
-  Future<void> loadIngredients() async {
+  Future<void> loadIngredients({String? userId}) async {
     _isLoading = true;
     notifyListeners();
     
     try {
-      final response = await http.get(Uri.parse('$baseUrl/ingredients'));
+      final response = await http.post(
+        Uri.parse('$baseUrl/supabase-ingredients'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'action': 'getIngredients',
+          'userId': userId ?? 'demo-user' // DEFAULT USER ID
+        }),
+      );
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         _ingredients = data['ingredients'];
@@ -36,19 +43,21 @@ class FoodAppState extends ChangeNotifier {
   }
 
   // Add new ingredient
-  Future<void> addIngredient(String name, {String category = 'uncategorized'}) async {
+  Future<void> addIngredient(String name, {String category = 'uncategorized', String? userId}) async {
     try {
       final response = await http.post(
-        Uri.parse('$baseUrl/ingredients'),
+        Uri.parse('$baseUrl/supabase-ingredients'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
+          'action': 'addIngredient',
           'name': name,
           'category': category,
+          'userId': userId ?? 'demo-user' // DEFAULT USER ID
         }),
       );
       
       if (response.statusCode == 200) {
-        await loadIngredients();
+        await loadIngredients(userId: userId);
       }
     } catch (e) {
       if (kDebugMode) {
@@ -58,49 +67,57 @@ class FoodAppState extends ChangeNotifier {
   }
 
   // Update ingredient
-Future<void> updateIngredient(String id, {String? name, String? category}) async {
-  try {
-    // Update local state immediately for better UX
-    final index = _ingredients.indexWhere((ing) => ing['id'].toString() == id);
-    if (index != -1) {
-      // Create a copy to avoid direct mutation
-      final updatedIngredients = List<dynamic>.from(_ingredients);
-      if (name != null) updatedIngredients[index]['name'] = name;
-      if (category != null) updatedIngredients[index]['category'] = category;
-      
-      _ingredients = updatedIngredients;
-      notifyListeners(); // This triggers UI updates
-    }
+  Future<void> updateIngredient(String id, {String? name, String? category, String? userId}) async {
+    try {
+      // Update local state immediately for better UX
+      final index = _ingredients.indexWhere((ing) => ing['id'].toString() == id);
+      if (index != -1) {
+        final updatedIngredients = List<dynamic>.from(_ingredients);
+        if (name != null) updatedIngredients[index]['name'] = name;
+        if (category != null) updatedIngredients[index]['category'] = category;
+        
+        _ingredients = updatedIngredients;
+        notifyListeners();
+      }
 
-    // Send update to server
-    final response = await http.put(
-      Uri.parse('$baseUrl/ingredients/$id'),
-      headers: {'Content-Type': 'application/json'},
-      body: json.encode({
-        if (name != null) 'name': name,
-        if (category != null) 'category': category,
-      }),
-    );
-    
-    if (response.statusCode != 200) {
-      // If server update failed, revert local changes
-      await loadIngredients();
+      // Send update to server
+      final response = await http.post(
+        Uri.parse('$baseUrl/supabase-ingredients'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'action': 'updateIngredient',
+          'ingredientId': id,
+          'userId': userId ?? 'demo-user', // DEFAULT USER ID
+          if (name != null) 'name': name,
+          if (category != null) 'category': category,
+        }),
+      );
+      
+      if (response.statusCode != 200) {
+        await loadIngredients(userId: userId);
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error updating ingredient: $e');
+      }
+      await loadIngredients(userId: userId);
     }
-  } catch (e) {
-    if (kDebugMode) {
-      print('Error updating ingredient: $e');
-    }
-    // Revert local changes if update failed
-    await loadIngredients();
   }
-}
 
   // Delete ingredient
-  Future<void> deleteIngredient(String id) async {
+  Future<void> deleteIngredient(String id, {String? userId}) async {
     try {
-      final response = await http.delete(Uri.parse('$baseUrl/ingredients/$id'));
+      final response = await http.post(
+        Uri.parse('$baseUrl/supabase-ingredients'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'action': 'removeIngredient',
+          'ingredientId': id,
+          'userId': userId ?? 'demo-user' // DEFAULT USER ID
+        }),
+      );
       if (response.statusCode == 200) {
-        await loadIngredients(); // Reload the list
+        await loadIngredients(userId: userId);
       }
     } catch (e) {
       if (kDebugMode) {
@@ -110,18 +127,10 @@ Future<void> updateIngredient(String id, {String? name, String? category}) async
   }
 
   // Import multiple ingredients
-  Future<void> importIngredients(List<String> ingredientNames) async {
+  Future<void> importIngredients(List<String> ingredientNames, {String? userId}) async {
     try {
-      final ingredients = ingredientNames.map((name) => {'name': name}).toList();
-      
-      final response = await http.post(
-        Uri.parse('$baseUrl/ingredients/import'),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({'ingredients': ingredients}),
-      );
-      
-      if (response.statusCode == 200) {
-        await loadIngredients(); // Reload the list
+      for (final name in ingredientNames) {
+        await addIngredient(name, userId: userId);
       }
     } catch (e) {
       if (kDebugMode) {
@@ -130,7 +139,7 @@ Future<void> updateIngredient(String id, {String? name, String? category}) async
     }
   }
 
-  // Chat with AI assistant
+  // Chat with AI assistant - NO CHANGES NEEDED
   Future<void> sendMessage(String message) async {
     _isLoading = true;
     notifyListeners();
@@ -157,33 +166,43 @@ Future<void> updateIngredient(String id, {String? name, String? category}) async
     }
   }
 
-  // Get recipe suggestions
-  Future<String> getRecipeSuggestions({
+  // Get recipe suggestions - UPDATED to handle new response format
+  Future<Map<String, dynamic>> getRecipeSuggestions({
     String? cuisine, 
     String? diet, 
     String? time,
     List<String>? appliances,
+    List<String>? ingredients,
   }) async {
     try {
       final response = await http.post(
-        Uri.parse('$baseUrl/recipes/suggest'),
+        Uri.parse('$baseUrl/generateRecipe'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
+          'ingredients': ingredients ?? [], // Use provided ingredients or empty
+          'dietaryPreferences': diet,
+          'mealType': time,
           'cuisine': cuisine,
-          'diet': diet,
-          'time': time,
-          'appliances': appliances,
         }),
       );
       
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        return data['suggestions'] ?? 'No suggestions available';
+        return {
+          'success': true,
+          'recipe': data['recipe'] // Return the full recipe object
+        };
       } else {
-        return 'Failed to get suggestions: ${response.statusCode}';
+        return {
+          'success': false,
+          'error': 'Failed to get suggestions: ${response.statusCode}'
+        };
       }
     } catch (e) {
-      return 'Error connecting to recipe service: $e';
+      return {
+        'success': false,
+        'error': 'Error connecting to recipe service: $e'
+      };
     }
   }
 }
