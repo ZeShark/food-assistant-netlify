@@ -13,8 +13,21 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  let body = req.body;
+if (typeof body === 'string') {
   try {
-    const { message, chatHistory = [] } = req.body;
+    body = JSON.parse(body);
+  } catch (parseError) {
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid JSON in request body'
+    });
+  }
+}
+
+
+  try {
+    const { message, chatHistory = [] } = body;
 
     if (!message) {
       return res.status(400).json({ error: 'Message is required' });
