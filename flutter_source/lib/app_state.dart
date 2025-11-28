@@ -35,19 +35,19 @@ class FoodAppState extends ChangeNotifier {
 
   // Available AI models
   final List<String> availableModels = [
-    'google/gemini-flash-1.5',
-    'anthropic/claude-3-haiku', 
     'meta-llama/llama-3.1-8b-instruct:free',
     'microsoft/wizardlm-2-8x22b',
     'qwen/qwen-2.5-7b-instruct:free',
+    'anthropic/claude-3-haiku',
   ];
   
-  String _selectedModel = 'google/gemini-flash-1.5';
+  String _selectedModel = 'meta-llama/llama-3.1-8b-instruct:free';
   String get selectedModel => _selectedModel;
-  
+
   // Initialize from shared preferences
   FoodAppState() {
     _loadPreferences();
+    loadRecipes(); // Load from Supabase on startup
   }
 
   // Load saved data
@@ -73,7 +73,7 @@ class FoodAppState extends ChangeNotifier {
     }
     
     // Load selected model
-    _selectedModel = prefs.getString('selectedModel') ?? 'google/gemini-flash-1.5';
+    _selectedModel = prefs.getString('selectedModel') ?? 'meta-llama/llama-3.1-8b-instruct:free';
     
     notifyListeners();
   }
@@ -107,9 +107,33 @@ class FoodAppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Save recipe to recipe book
-  void saveRecipe(Map<String, dynamic> recipe) {
-    // Add timestamp and ID
+  // Save recipe to recipe book (Supabase)
+  Future<void> saveRecipe(Map<String, dynamic> recipe) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/supabase-recipes'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'action': 'saveRecipe',
+          'userId': 'demo-user',
+          'recipe': recipe
+        }),
+      );
+      
+      if (response.statusCode == 200) {
+        await loadRecipes(); // Reload to get the updated list
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error saving recipe to Supabase: $e');
+      }
+      // Fallback to local storage if Supabase fails
+      _saveRecipeLocally(recipe);
+    }
+  }
+
+  // Local storage fallback
+  void _saveRecipeLocally(Map<String, dynamic> recipe) {
     final recipeToSave = {
       ...recipe,
       'id': DateTime.now().millisecondsSinceEpoch.toString(),
@@ -121,11 +145,55 @@ class FoodAppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Remove recipe from recipe book
-  void removeRecipe(String recipeId) {
-    _savedRecipes.removeWhere((recipe) => recipe['id'] == recipeId);
-    _savePreferences();
-    notifyListeners();
+  // Remove recipe from recipe book (Supabase)
+  Future<void> removeRecipe(String recipeId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/supabase-recipes'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'action': 'removeRecipe',
+          'userId': 'demo-user',
+          'recipeId': recipeId
+        }),
+      );
+      
+      if (response.statusCode == 200) {
+        await loadRecipes(); // Reload to get the updated list
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error removing recipe from Supabase: $e');
+      }
+      // Fallback to local removal
+      _savedRecipes.removeWhere((recipe) => recipe['id'] == recipeId);
+      _savePreferences();
+      notifyListeners();
+    }
+  }
+
+  // Load saved recipes from Supabase
+  Future<void> loadRecipes() async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/supabase-recipes'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'action': 'getRecipes',
+          'userId': 'demo-user'
+        }),
+      );
+      
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        _savedRecipes = List<Map<String, dynamic>>.from(data['recipes'] ?? []);
+        notifyListeners();
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error loading recipes from Supabase: $e');
+      }
+    }
   }
 
   // Update taste profile
@@ -153,6 +221,8 @@ class FoodAppState extends ChangeNotifier {
     }
   }
 
+  // ========== EXISTING INGREDIENT METHODS ==========
+
   // Load ingredients from backend
   Future<void> loadIngredients({String? userId}) async {
     _isLoading = true;
@@ -164,12 +234,12 @@ class FoodAppState extends ChangeNotifier {
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'action': 'getIngredients',
-          'userId': userId ?? 'demo-user' // DEFAULT USER ID
+          'userId': userId ?? 'demo-user'
         }),
       );
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        _ingredients = data['ingredients'];
+        _ingredients = data['ingredients'] ?? [];
       }
     } catch (e) {
       if (kDebugMode) {
@@ -191,7 +261,7 @@ class FoodAppState extends ChangeNotifier {
           'action': 'addIngredient',
           'name': name,
           'category': category,
-          'userId': userId ?? 'demo-user' // DEFAULT USER ID
+          'userId': userId ?? 'demo-user'
         }),
       );
       
@@ -226,7 +296,7 @@ class FoodAppState extends ChangeNotifier {
         body: json.encode({
           'action': 'updateIngredient',
           'ingredientId': id,
-          'userId': userId ?? 'demo-user', // DEFAULT USER ID
+          'userId': userId ?? 'demo-user',
           if (name != null) 'name': name,
           if (category != null) 'category': category,
         }),
@@ -252,7 +322,7 @@ class FoodAppState extends ChangeNotifier {
         body: json.encode({
           'action': 'removeIngredient',
           'ingredientId': id,
-          'userId': userId ?? 'demo-user' // DEFAULT USER ID
+          'userId': userId ?? 'demo-user'
         }),
       );
       if (response.statusCode == 200) {
@@ -278,7 +348,9 @@ class FoodAppState extends ChangeNotifier {
     }
   }
 
-  // Chat with AI assistant - UPDATED with model selection
+  // ========== CHAT AND RECIPE METHODS ==========
+
+  // Chat with AI assistant
   Future<void> sendMessage(String message, {List<Map<String, String>>? chatHistory}) async {
     _isLoading = true;
     notifyListeners();
@@ -290,7 +362,7 @@ class FoodAppState extends ChangeNotifier {
         body: json.encode({
           'message': message,
           'chatHistory': chatHistory ?? [],
-          'model': _selectedModel, // Add selected model
+          'model': _selectedModel,
         }),
       );
       
@@ -311,7 +383,7 @@ class FoodAppState extends ChangeNotifier {
     }
   }
 
-   // Updated getRecipeSuggestions to use taste profile
+  // Get recipe suggestions
   Future<Map<String, dynamic>> getRecipeSuggestions({
     String? cuisine, 
     String? diet, 
