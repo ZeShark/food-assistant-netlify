@@ -41,24 +41,18 @@ export default async function handler(req, res) {
     const openRouterConfig = getOpenRouterConfig();
     
     // Simplified prompt that's more likely to return valid JSON
-    const prompt = `Create a recipe using these ingredients: ${ingredients.join(', ')}
-${cuisine ? `Cuisine: ${cuisine}` : ''}
-${mealType ? `Meal type: ${mealType}` : ''}
-${dietaryPreferences ? `Dietary: ${dietaryPreferences}` : ''}
+    const prompt = `Create a recipe using: ${ingredients.join(', ')}
+${cuisine ? `Style: ${cuisine}` : ''}${mealType ? `, ${mealType}` : ''}${dietaryPreferences ? `, ${dietaryPreferences}` : ''}
+${preferredIngredients ? `Preferred ingredients: ${preferredIngredients.join(', ')}` : ''}
+${dislikedIngredients ? `Avoid: ${dislikedIngredients.join(', ')}` : ''}
 
-Return ONLY valid JSON in this exact format, no other text:
+Return ONLY this JSON, no other text:
 {
-  "title": "Recipe name",
-  "description": "Brief description",
-  "ingredients": [
-    {"name": "ingredient1", "amount": "amount1"},
-    {"name": "ingredient2", "amount": "amount2"}
-  ],
-  "instructions": [
-    "Step 1 instruction",
-    "Step 2 instruction"
-  ],
-  "cookingTime": "XX minutes",
+  "title": "Name",
+  "description": "Brief description", 
+  "ingredients": [{"name": "ing", "amount": "amt"}],
+  "instructions": ["Step 1", "Step 2"],
+  "cookingTime": "XX min",
   "difficulty": "Easy/Medium/Hard"
 }`;
 

@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class FoodAppState extends ChangeNotifier {
   static const String baseUrl = 'https://food-assistant-netlify.vercel.app/api';
@@ -14,20 +15,142 @@ class FoodAppState extends ChangeNotifier {
   bool _isLoading = false;
   bool get isLoading => _isLoading;
 
-    // Available AI models
+  // Recipe storage
+  List<Map<String, dynamic>> _savedRecipes = [];
+  List<Map<String, dynamic>> get savedRecipes => _savedRecipes;
+  
+  Map<String, dynamic>? _currentRecipe;
+  Map<String, dynamic>? get currentRecipe => _currentRecipe;
+  
+  // User taste profile
+  Map<String, dynamic> _tasteProfile = {
+    'likedIngredients': [],
+    'dislikedIngredients': [],
+    'preferredCuisines': [],
+    'preferredCookingTime': 'Medium (30-60 min)',
+    'spiceLevel': 'Medium',
+    'dietaryRestrictions': [],
+  };
+  Map<String, dynamic> get tasteProfile => _tasteProfile;
+
+  // Available AI models
   final List<String> availableModels = [
     'google/gemini-flash-1.5',
-    'anthropic/claude-3-haiku',
+    'anthropic/claude-3-haiku', 
     'meta-llama/llama-3.1-8b-instruct:free',
     'microsoft/wizardlm-2-8x22b',
+    'qwen/qwen-2.5-7b-instruct:free',
   ];
   
   String _selectedModel = 'google/gemini-flash-1.5';
   String get selectedModel => _selectedModel;
   
+  // Initialize from shared preferences
+  FoodAppState() {
+    _loadPreferences();
+  }
+
+  // Load saved data
+  Future<void> _loadPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    
+    // Load saved recipes
+    final recipesJson = prefs.getString('savedRecipes');
+    if (recipesJson != null) {
+      _savedRecipes = List<Map<String, dynamic>>.from(json.decode(recipesJson));
+    }
+    
+    // Load current recipe
+    final currentRecipeJson = prefs.getString('currentRecipe');
+    if (currentRecipeJson != null) {
+      _currentRecipe = Map<String, dynamic>.from(json.decode(currentRecipeJson));
+    }
+    
+    // Load taste profile
+    final tasteProfileJson = prefs.getString('tasteProfile');
+    if (tasteProfileJson != null) {
+      _tasteProfile = Map<String, dynamic>.from(json.decode(tasteProfileJson));
+    }
+    
+    // Load selected model
+    _selectedModel = prefs.getString('selectedModel') ?? 'google/gemini-flash-1.5';
+    
+    notifyListeners();
+  }
+
+  // Save data to shared preferences
+  Future<void> _savePreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('savedRecipes', json.encode(_savedRecipes));
+    await prefs.setString('currentRecipe', json.encode(_currentRecipe));
+    await prefs.setString('tasteProfile', json.encode(_tasteProfile));
+    await prefs.setString('selectedModel', _selectedModel);
+  }
+
   void setSelectedModel(String model) {
     _selectedModel = model;
+    _savePreferences();
     notifyListeners();
+  }
+
+  // Save current recipe
+  void setCurrentRecipe(Map<String, dynamic> recipe) {
+    _currentRecipe = recipe;
+    _savePreferences();
+    notifyListeners();
+  }
+
+  // Clear current recipe
+  void clearCurrentRecipe() {
+    _currentRecipe = null;
+    _savePreferences();
+    notifyListeners();
+  }
+
+  // Save recipe to recipe book
+  void saveRecipe(Map<String, dynamic> recipe) {
+    // Add timestamp and ID
+    final recipeToSave = {
+      ...recipe,
+      'id': DateTime.now().millisecondsSinceEpoch.toString(),
+      'savedAt': DateTime.now().toIso8601String(),
+    };
+    
+    _savedRecipes.add(recipeToSave);
+    _savePreferences();
+    notifyListeners();
+  }
+
+  // Remove recipe from recipe book
+  void removeRecipe(String recipeId) {
+    _savedRecipes.removeWhere((recipe) => recipe['id'] == recipeId);
+    _savePreferences();
+    notifyListeners();
+  }
+
+  // Update taste profile
+  void updateTasteProfile(Map<String, dynamic> updates) {
+    _tasteProfile.addAll(updates);
+    _savePreferences();
+    notifyListeners();
+  }
+
+  // Like an ingredient (for taste profile)
+  void likeIngredient(String ingredient) {
+    if (!_tasteProfile['likedIngredients'].contains(ingredient)) {
+      _tasteProfile['likedIngredients'].add(ingredient);
+      _savePreferences();
+      notifyListeners();
+    }
+  }
+
+  // Dislike an ingredient (for taste profile)
+  void dislikeIngredient(String ingredient) {
+    if (!_tasteProfile['dislikedIngredients'].contains(ingredient)) {
+      _tasteProfile['dislikedIngredients'].add(ingredient);
+      _savePreferences();
+      notifyListeners();
+    }
   }
 
   // Load ingredients from backend
@@ -155,7 +278,7 @@ class FoodAppState extends ChangeNotifier {
     }
   }
 
-    // Chat with AI assistant - UPDATED with model selection
+  // Chat with AI assistant - UPDATED with model selection
   Future<void> sendMessage(String message, {List<Map<String, String>>? chatHistory}) async {
     _isLoading = true;
     notifyListeners();
@@ -188,29 +311,41 @@ class FoodAppState extends ChangeNotifier {
     }
   }
 
-  // Get recipe suggestions - UPDATED with model selection
+   // Updated getRecipeSuggestions to use taste profile
   Future<Map<String, dynamic>> getRecipeSuggestions({
     String? cuisine, 
     String? diet, 
     String? time,
     List<String>? appliances,
     List<String>? ingredients,
+    bool useTasteProfile = true,
   }) async {
     try {
+      // Build request body with taste profile if enabled
+      Map<String, dynamic> requestBody = {
+        'ingredients': ingredients ?? [],
+        'dietaryPreferences': diet,
+        'mealType': time,
+        'cuisine': cuisine,
+        'model': _selectedModel,
+      };
+
+      // Add taste profile data if available and enabled
+      if (useTasteProfile && _tasteProfile['likedIngredients'].isNotEmpty) {
+        requestBody['preferredIngredients'] = _tasteProfile['likedIngredients'];
+        requestBody['dislikedIngredients'] = _tasteProfile['dislikedIngredients'];
+      }
+
       final response = await http.post(
         Uri.parse('$baseUrl/generateRecipe'),
         headers: {'Content-Type': 'application/json'},
-        body: json.encode({
-          'ingredients': ingredients ?? [],
-          'dietaryPreferences': diet,
-          'mealType': time,
-          'cuisine': cuisine,
-          'model': _selectedModel, // Add selected model
-        }),
+        body: json.encode(requestBody),
       );
       
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
+        // Automatically save as current recipe
+        setCurrentRecipe(data['recipe']);
         return {
           'success': true,
           'recipe': data['recipe']

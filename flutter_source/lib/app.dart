@@ -1,8 +1,9 @@
-// ignore: unsued_imports
+// ignore: unused_import
 import 'package:flutter/material.dart';
 import 'screens/ingredients_screen.dart';
 import 'screens/recipes_screen.dart';
 import 'screens/chat_screen.dart';
+import 'screens/recipe_book_screen.dart'; // Add this import
 
 class FoodAssistantApp extends StatelessWidget {
   const FoodAssistantApp({super.key});
@@ -34,6 +35,7 @@ class _MainScreenState extends State<MainScreen> {
     const IngredientsScreen(),
     const RecipesScreen(),
     const ChatScreen(),
+    const RecipeBookScreen(), // Add Recipe Book screen
   ];
 
   void _onItemTapped(int index) {
@@ -61,6 +63,10 @@ class _MainScreenState extends State<MainScreen> {
           BottomNavigationBarItem(
             icon: Icon(Icons.chat),
             label: 'Assistant',
+          ),
+          BottomNavigationBarItem( // Add Recipe Book item
+            icon: Icon(Icons.menu_book),
+            label: 'Recipe Book',
           ),
         ],
       ),
