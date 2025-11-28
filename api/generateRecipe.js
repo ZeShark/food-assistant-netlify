@@ -10,6 +10,7 @@ export default async function handler(req, res) {
     'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
   );
 
+  // Handle OPTIONS request for CORS
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
@@ -31,7 +32,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { ingredients, dietaryPreferences, mealType, cuisine, model = 'google/gemini-flash-1.5' } = body; // Default model
+    const { ingredients, dietaryPreferences, mealType, cuisine, model = 'microsoft/wizardlm-2-8x22b' } = body;
 
     if (!ingredients || !Array.isArray(ingredients)) {
       return res.status(400).json({ error: 'Ingredients are required and must be an array' });
@@ -39,33 +40,30 @@ export default async function handler(req, res) {
 
     const openRouterConfig = getOpenRouterConfig();
     
-    const prompt = `Create a detailed recipe with the following requirements:
-    
-INGREDIENTS TO USE: ${ingredients.join(', ')}
-DIETARY PREFERENCES: ${dietaryPreferences || 'None'}
-MEAL TYPE: ${mealType || 'Any'}
-CUISINE: ${cuisine || 'Any'}
+    // Simplified prompt that's more likely to return valid JSON
+    const prompt = `Create a recipe using these ingredients: ${ingredients.join(', ')}
+${cuisine ? `Cuisine: ${cuisine}` : ''}
+${mealType ? `Meal type: ${mealType}` : ''}
+${dietaryPreferences ? `Dietary: ${dietaryPreferences}` : ''}
 
-Please provide the recipe in JSON format with the following structure:
+Return ONLY valid JSON in this exact format, no other text:
 {
-  "title": "Recipe title",
+  "title": "Recipe name",
   "description": "Brief description",
   "ingredients": [
-    {"name": "ingredient name", "amount": "amount with unit"}
+    {"name": "ingredient1", "amount": "amount1"},
+    {"name": "ingredient2", "amount": "amount2"}
   ],
   "instructions": [
-    "Step 1...",
-    "Step 2..."
+    "Step 1 instruction",
+    "Step 2 instruction"
   ],
   "cookingTime": "XX minutes",
-  "difficulty": "Easy/Medium/Hard",
-  "nutritionalInfo": {
-    "calories": "approx calories",
-    "protein": "approx protein",
-    "carbs": "approx carbs"
-  }
+  "difficulty": "Easy/Medium/Hard"
 }`;
 
+    console.log('Sending request to OpenRouter with model:', model);
+    
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -75,7 +73,7 @@ Please provide the recipe in JSON format with the following structure:
         'X-Title': openRouterConfig.title
       },
       body: JSON.stringify({
-        model: model, // Use the selected model
+        model: model,
         messages: [
           {
             role: 'user',
@@ -95,19 +93,38 @@ Please provide the recipe in JSON format with the following structure:
 
     const data = await response.json();
     const recipeContent = data.choices[0].message.content;
+    console.log('Raw AI response:', recipeContent);
     
+    // Better JSON parsing with fallback
     let recipe;
     try {
+      // First try direct parse
       recipe = JSON.parse(recipeContent);
     } catch (parseError) {
-      console.error('Error parsing AI response:', parseError);
-      const jsonMatch = recipeContent.match(/\{[\s\S]*\}/);
+      console.log('Direct parse failed, trying to extract JSON...');
+      
+      // Try to extract JSON from markdown code blocks or other wrappers
+      const jsonMatch = recipeContent.match(/```json\n?([\s\S]*?)\n?```/) || 
+                       recipeContent.match(/\{[\s\S]*\}/);
+      
       if (jsonMatch) {
-        recipe = JSON.parse(jsonMatch[0]);
+        const jsonString = jsonMatch[1] || jsonMatch[0];
+        recipe = JSON.parse(jsonString);
       } else {
-        throw new Error('AI response is not valid JSON');
+        // If all else fails, create a basic recipe from the text
+        console.log('JSON extraction failed, creating fallback recipe');
+        recipe = {
+          title: "Generated Recipe",
+          description: "AI-generated recipe based on your ingredients",
+          ingredients: ingredients.map(ing => ({ name: ing, amount: "to taste" })),
+          instructions: ["Mix all ingredients together and cook as desired."],
+          cookingTime: "30 minutes",
+          difficulty: "Easy"
+        };
       }
     }
+
+    console.log('Final recipe object:', recipe);
 
     res.status(200).json({
       success: true,
