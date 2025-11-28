@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 
 class FoodAppState extends ChangeNotifier {
-  static const String baseUrl = '/api';
+  static const String baseUrl = 'https://food-assistant-netlify.vercel.app/api';
   
   List<dynamic> _ingredients = [];
   List<dynamic> get ingredients => _ingredients;
