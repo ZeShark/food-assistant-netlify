@@ -14,6 +14,22 @@ class FoodAppState extends ChangeNotifier {
   bool _isLoading = false;
   bool get isLoading => _isLoading;
 
+    // Available AI models
+  final List<String> availableModels = [
+    'google/gemini-flash-1.5',
+    'anthropic/claude-3-haiku',
+    'meta-llama/llama-3.1-8b-instruct:free',
+    'microsoft/wizardlm-2-8x22b',
+  ];
+  
+  String _selectedModel = 'google/gemini-flash-1.5';
+  String get selectedModel => _selectedModel;
+  
+  void setSelectedModel(String model) {
+    _selectedModel = model;
+    notifyListeners();
+  }
+
   // Load ingredients from backend
   Future<void> loadIngredients({String? userId}) async {
     _isLoading = true;
@@ -139,8 +155,8 @@ class FoodAppState extends ChangeNotifier {
     }
   }
 
-  // Chat with AI assistant - NO CHANGES NEEDED
-  Future<void> sendMessage(String message) async {
+    // Chat with AI assistant - UPDATED with model selection
+  Future<void> sendMessage(String message, {List<Map<String, String>>? chatHistory}) async {
     _isLoading = true;
     notifyListeners();
     
@@ -148,15 +164,21 @@ class FoodAppState extends ChangeNotifier {
       final response = await http.post(
         Uri.parse('$baseUrl/chat'),
         headers: {'Content-Type': 'application/json'},
-        body: json.encode({'message': message}),
+        body: json.encode({
+          'message': message,
+          'chatHistory': chatHistory ?? [],
+          'model': _selectedModel, // Add selected model
+        }),
       );
       
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         _chatResponse = data['response'];
+      } else {
+        _chatResponse = 'Error: ${response.statusCode}';
       }
     } catch (e) {
-      _chatResponse = 'Error connecting to assistant. Make sure the backend is running.';
+      _chatResponse = 'Error connecting to assistant: $e';
       if (kDebugMode) {
         print('Error sending message: $e');
       }
@@ -166,7 +188,7 @@ class FoodAppState extends ChangeNotifier {
     }
   }
 
-  // Get recipe suggestions - UPDATED to handle new response format
+  // Get recipe suggestions - UPDATED with model selection
   Future<Map<String, dynamic>> getRecipeSuggestions({
     String? cuisine, 
     String? diet, 
@@ -179,10 +201,11 @@ class FoodAppState extends ChangeNotifier {
         Uri.parse('$baseUrl/generateRecipe'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
-          'ingredients': ingredients ?? [], // Use provided ingredients or empty
+          'ingredients': ingredients ?? [],
           'dietaryPreferences': diet,
           'mealType': time,
           'cuisine': cuisine,
+          'model': _selectedModel, // Add selected model
         }),
       );
       
@@ -190,7 +213,7 @@ class FoodAppState extends ChangeNotifier {
         final data = json.decode(response.body);
         return {
           'success': true,
-          'recipe': data['recipe'] // Return the full recipe object
+          'recipe': data['recipe']
         };
       } else {
         return {

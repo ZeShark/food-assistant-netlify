@@ -10,7 +10,6 @@ export default async function handler(req, res) {
     'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
   );
 
-  // Handle OPTIONS request for CORS
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
@@ -20,20 +19,19 @@ export default async function handler(req, res) {
   }
 
   let body = req.body;
-if (typeof body === 'string') {
-  try {
-    body = JSON.parse(body);
-  } catch (parseError) {
-    return res.status(400).json({
-      success: false,
-      error: 'Invalid JSON in request body'
-    });
+  if (typeof body === 'string') {
+    try {
+      body = JSON.parse(body);
+    } catch (parseError) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid JSON in request body'
+      });
+    }
   }
-}
-
 
   try {
-    const { ingredients, dietaryPreferences, mealType, cuisine } = body;
+    const { ingredients, dietaryPreferences, mealType, cuisine, model = 'google/gemini-flash-1.5' } = body; // Default model
 
     if (!ingredients || !Array.isArray(ingredients)) {
       return res.status(400).json({ error: 'Ingredients are required and must be an array' });
@@ -77,7 +75,7 @@ Please provide the recipe in JSON format with the following structure:
         'X-Title': openRouterConfig.title
       },
       body: JSON.stringify({
-        model: 'meta-llama/llama-3.1-8b-instruct:free',
+        model: model, // Use the selected model
         messages: [
           {
             role: 'user',
@@ -98,13 +96,11 @@ Please provide the recipe in JSON format with the following structure:
     const data = await response.json();
     const recipeContent = data.choices[0].message.content;
     
-    // Parse the JSON response from the AI
     let recipe;
     try {
       recipe = JSON.parse(recipeContent);
     } catch (parseError) {
       console.error('Error parsing AI response:', parseError);
-      // Fallback: try to extract JSON from the response
       const jsonMatch = recipeContent.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         recipe = JSON.parse(jsonMatch[0]);

@@ -21,7 +21,13 @@ class _ChatScreenState extends State<ChatScreen> {
       });
       _messageController.clear();
       
-      context.read<FoodAppState>().sendMessage(message).then((_) {
+      // Pass chat history to maintain context
+      final chatHistory = _messages.map((msg) => {
+        'role': msg['role']!,
+        'content': msg['content']!
+      }).toList();
+      
+      context.read<FoodAppState>().sendMessage(message, chatHistory: chatHistory).then((_) {
         final response = context.read<FoodAppState>().chatResponse;
         setState(() {
           _messages.add({'role': 'assistant', 'content': response});
@@ -38,6 +44,27 @@ class _ChatScreenState extends State<ChatScreen> {
       appBar: AppBar(
         title: const Text('Food Assistant'),
         actions: [
+          // Model selection dropdown
+          DropdownButton<String>(
+            value: appState.selectedModel,
+            onChanged: (newModel) {
+              if (newModel != null) {
+                appState.setSelectedModel(newModel);
+              }
+            },
+            items: appState.availableModels.map((model) {
+              final displayName = model.split('/').last;
+              return DropdownMenuItem(
+                value: model,
+                child: Text(
+                  displayName.length > 15 
+                    ? '${displayName.substring(0, 15)}...' 
+                    : displayName,
+                  style: const TextStyle(fontSize: 12),
+                ),
+              );
+            }).toList(),
+          ),
           IconButton(
             icon: const Icon(Icons.clear_all),
             onPressed: () {

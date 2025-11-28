@@ -14,20 +14,19 @@ export default async function handler(req, res) {
   }
 
   let body = req.body;
-if (typeof body === 'string') {
-  try {
-    body = JSON.parse(body);
-  } catch (parseError) {
-    return res.status(400).json({
-      success: false,
-      error: 'Invalid JSON in request body'
-    });
+  if (typeof body === 'string') {
+    try {
+      body = JSON.parse(body);
+    } catch (parseError) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid JSON in request body'
+      });
+    }
   }
-}
-
 
   try {
-    const { message, chatHistory = [] } = body;
+    const { message, chatHistory = [], model = 'google/gemini-flash-1.5' } = body; // Default model
 
     if (!message) {
       return res.status(400).json({ error: 'Message is required' });
@@ -58,7 +57,7 @@ if (typeof body === 'string') {
         'X-Title': openRouterConfig.title
       },
       body: JSON.stringify({
-        model: 'meta-llama/llama-3.1-8b-instruct:free',
+        model: model, // Use the selected model
         messages: messages,
         max_tokens: 1000,
         temperature: 0.7

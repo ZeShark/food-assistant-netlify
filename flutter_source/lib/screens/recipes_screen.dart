@@ -70,7 +70,7 @@ class _RecipesScreenState extends State<RecipesScreen> {
 
       final result = await appState.getRecipeSuggestions(
         cuisine: _selectedCuisine,
-        diet: null, // Your original code didn't have diet
+        diet: null,
         time: _selectedTime,
         appliances: selectedAppliances,
         ingredients: currentIngredients,
@@ -179,6 +179,18 @@ Difficulty: ${recipe['difficulty'] ?? 'Not specified'}
     return Scaffold(
       appBar: AppBar(
         title: const Text('Recipe Suggestions'),
+        actions: [
+          // Show current model in recipes screen too
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Chip(
+              label: Text(
+                appState.selectedModel.split('/').last,
+                style: const TextStyle(fontSize: 12),
+              ),
+            ),
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -193,6 +205,26 @@ Difficulty: ${recipe['difficulty'] ?? 'Not specified'}
                   const Text(
                     'Recipe Filters',
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 16),
+                  
+                  // Current AI Model Info
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.blue[50],
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.smart_toy, size: 16),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Using: ${appState.selectedModel.split('/').last}',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 16),
                   
