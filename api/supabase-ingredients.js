@@ -1,18 +1,28 @@
-import { createSupabaseClient } from './utils/apiConfig.js';
+import { createClient } from '@supabase/supabase-js';
 
-const supabase = createSupabaseClient();
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_ANON_KEY
+);
 
 export default async function handler(req, res) {
+  // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
   res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
 
+  // Handle OPTIONS request for CORS
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
-    try {
-    // Parse JSON body if it exists and is stringified
+  // Check method
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  try {
+    // PARSE JSON BODY - THIS IS THE FIX
     let body = req.body;
     if (typeof body === 'string') {
       try {
@@ -25,7 +35,8 @@ export default async function handler(req, res) {
       }
     }
 
-    const { action, ...data } = body || {};
+    // NOW safely destructure
+    const { action, ...data } = body;
 
     if (!action) {
       return res.status(400).json({
@@ -33,6 +44,7 @@ export default async function handler(req, res) {
         error: 'Action parameter is required'
       });
     }
+
     switch (action) {
       case 'getIngredients':
         return await handleGetIngredients(req, res, data);
@@ -59,6 +71,7 @@ export default async function handler(req, res) {
   }
 }
 
+// KEEP ALL YOUR EXISTING HANDLER FUNCTIONS BELOW - DON'T CHANGE THEM
 async function handleGetIngredients(req, res, data) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
