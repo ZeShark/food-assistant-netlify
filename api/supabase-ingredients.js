@@ -14,9 +14,28 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  try {
-    const { action, ...data } = req.body;
+    try {
+    // Parse JSON body if it exists and is stringified
+    let body = req.body;
+    if (typeof body === 'string') {
+      try {
+        body = JSON.parse(body);
+      } catch (parseError) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid JSON in request body'
+        });
+      }
+    }
 
+    const { action, ...data } = body || {};
+
+    if (!action) {
+      return res.status(400).json({
+        success: false,
+        error: 'Action parameter is required'
+      });
+    }
     switch (action) {
       case 'getIngredients':
         return await handleGetIngredients(req, res, data);
