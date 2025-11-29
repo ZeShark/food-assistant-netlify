@@ -4,8 +4,21 @@ import 'screens/recipes_screen.dart';
 import 'screens/chat_screen.dart';
 import 'screens/recipe_book_screen.dart';
 
-class FoodAssistantApp extends StatelessWidget {
+class FoodAssistantApp extends StatefulWidget {
   const FoodAssistantApp({super.key});
+
+  @override
+  State<FoodAssistantApp> createState() => _FoodAssistantAppState();
+}
+
+class _FoodAssistantAppState extends State<FoodAssistantApp> {
+  ThemeMode _themeMode = ThemeMode.dark;
+
+  void _toggleTheme() {
+    setState(() {
+      _themeMode = _themeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -13,13 +26,16 @@ class FoodAssistantApp extends StatelessWidget {
       title: 'Food Assistant',
       theme: lightTheme,
       darkTheme: darkTheme,
-      themeMode: ThemeMode.dark, // Default to dark mode
-      home: const MainScreen(),
+      themeMode: _themeMode,
+      home: MainScreen(
+        onThemeToggle: _toggleTheme,
+        isDarkMode: _themeMode == ThemeMode.dark,
+      ),
     );
   }
 }
 
-// Light Theme - Using copyWith for reliability
+// Light Theme
 final ThemeData lightTheme = ThemeData.light().copyWith(
   useMaterial3: true,
   colorScheme: ColorScheme.fromSeed(
@@ -39,13 +55,17 @@ final ThemeData lightTheme = ThemeData.light().copyWith(
     selectedItemColor: Colors.white,
     unselectedItemColor: Colors.grey,
   ),
-  textTheme: const TextTheme(
-    bodyLarge: TextStyle(color: Colors.black87),
-    bodyMedium: TextStyle(color: Colors.black87),
+  // Fix dropdown text colors
+  dropdownMenuTheme: DropdownMenuThemeData(
+    textStyle: MaterialStateTextStyle.resolveWith(
+      (Set<MaterialState> states) {
+        return const TextStyle(color: Colors.black87);
+      },
+    ),
   ),
 );
 
-// Dark Theme - Using copyWith for reliability
+// Dark Theme
 final ThemeData darkTheme = ThemeData.dark().copyWith(
   useMaterial3: true,
   colorScheme: ColorScheme.fromSeed(
@@ -71,14 +91,31 @@ final ThemeData darkTheme = ThemeData.dark().copyWith(
   dialogTheme: const DialogThemeData(
     backgroundColor: Color(0xFF1E1E1E),
   ),
-  textTheme: const TextTheme(
-    bodyLarge: TextStyle(color: Colors.white),
-    bodyMedium: TextStyle(color: Colors.white),
+  // Fix dropdown text colors for dark mode
+  dropdownMenuTheme: DropdownMenuThemeData(
+    textStyle: MaterialStateTextStyle.resolveWith(
+      (Set<MaterialState> states) {
+        return const TextStyle(color: Colors.white);
+      },
+    ),
+  ),
+  // Fix input decoration text colors
+  inputDecorationTheme: const InputDecorationTheme(
+    labelStyle: TextStyle(color: Colors.grey),
+    hintStyle: TextStyle(color: Colors.grey),
+    floatingLabelStyle: TextStyle(color: Colors.tealAccent),
   ),
 );
 
 class MainScreen extends StatefulWidget {
-  const MainScreen({super.key});
+  final VoidCallback onThemeToggle;
+  final bool isDarkMode;
+
+  const MainScreen({
+    super.key,
+    required this.onThemeToggle,
+    required this.isDarkMode,
+  });
 
   @override
   State<MainScreen> createState() => _MainScreenState();
@@ -102,14 +139,24 @@ class _MainScreenState extends State<MainScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-
     return Scaffold(
+      appBar: AppBar(
+        title: const Text('Food Assistant'),
+        backgroundColor: widget.isDarkMode ? const Color(0xFF1E1E1E) : Colors.green,
+        foregroundColor: widget.isDarkMode ? Colors.tealAccent : Colors.white,
+        actions: [
+          IconButton(
+            icon: Icon(widget.isDarkMode ? Icons.light_mode : Icons.dark_mode),
+            onPressed: widget.onThemeToggle,
+            tooltip: widget.isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode',
+          ),
+        ],
+      ),
       body: _screens[_selectedIndex],
       bottomNavigationBar: BottomNavigationBar(
-        backgroundColor: isDarkMode ? Colors.black : Colors.deepPurple,
-        selectedItemColor: isDarkMode ? Colors.tealAccent : Colors.white,
-        unselectedItemColor: isDarkMode ? Colors.grey : Colors.grey[300],
+        backgroundColor: widget.isDarkMode ? Colors.black : Colors.deepPurple,
+        selectedItemColor: widget.isDarkMode ? Colors.tealAccent : Colors.white,
+        unselectedItemColor: widget.isDarkMode ? Colors.grey : Colors.grey[300],
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
         type: BottomNavigationBarType.fixed,
