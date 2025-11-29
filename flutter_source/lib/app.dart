@@ -11,29 +11,71 @@ class FoodAssistantApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Food Assistant',
-      theme: ThemeData.light().copyWith(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
-        bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-          backgroundColor: Colors.black,
-          selectedItemColor: Colors.white,
-          unselectedItemColor: Colors.grey,
-        ),
-      ),
-      darkTheme: ThemeData.dark().copyWith(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.tealAccent),
-        bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-          backgroundColor: Colors.black,
-          selectedItemColor: Colors.tealAccent,
-          unselectedItemColor: Colors.grey,
-        ),
-      ),
-      themeMode: ThemeMode.system,
+      theme: lightTheme,
+      darkTheme: darkTheme,
+      themeMode: ThemeMode.dark, // Default to dark mode
       home: const MainScreen(),
     );
   }
 }
+
+// Light Theme - Using copyWith for reliability
+final ThemeData lightTheme = ThemeData.light().copyWith(
+  useMaterial3: true,
+  colorScheme: ColorScheme.fromSeed(
+    seedColor: Colors.green,
+    brightness: Brightness.light,
+    primary: Colors.green,
+    secondary: Colors.deepPurple,
+  ),
+  scaffoldBackgroundColor: Colors.grey[50],
+  appBarTheme: const AppBarTheme(
+    backgroundColor: Colors.green,
+    foregroundColor: Colors.white,
+    elevation: 2,
+  ),
+  bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+    backgroundColor: Colors.deepPurple,
+    selectedItemColor: Colors.white,
+    unselectedItemColor: Colors.grey,
+  ),
+  textTheme: const TextTheme(
+    bodyLarge: TextStyle(color: Colors.black87),
+    bodyMedium: TextStyle(color: Colors.black87),
+  ),
+);
+
+// Dark Theme - Using copyWith for reliability
+final ThemeData darkTheme = ThemeData.dark().copyWith(
+  useMaterial3: true,
+  colorScheme: ColorScheme.fromSeed(
+    seedColor: Colors.tealAccent,
+    brightness: Brightness.dark,
+    primary: Colors.tealAccent,
+    secondary: Colors.greenAccent,
+  ),
+  scaffoldBackgroundColor: const Color(0xFF121212),
+  appBarTheme: const AppBarTheme(
+    backgroundColor: Color(0xFF1E1E1E),
+    foregroundColor: Colors.tealAccent,
+    elevation: 4,
+  ),
+  bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+    backgroundColor: Colors.black,
+    selectedItemColor: Colors.tealAccent,
+    unselectedItemColor: Colors.grey,
+  ),
+  cardTheme: const CardThemeData(
+    color: Color(0xFF1E1E1E),
+  ),
+  dialogTheme: const DialogThemeData(
+    backgroundColor: Color(0xFF1E1E1E),
+  ),
+  textTheme: const TextTheme(
+    bodyLarge: TextStyle(color: Colors.white),
+    bodyMedium: TextStyle(color: Colors.white),
+  ),
+);
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -44,7 +86,6 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
-  ThemeMode _themeMode = ThemeMode.system;
 
   static const List<Widget> _screens = [
     IngredientsScreen(),
@@ -59,102 +100,37 @@ class _MainScreenState extends State<MainScreen> {
     });
   }
 
-  void _toggleTheme() {
-    setState(() {
-      if (_themeMode == ThemeMode.light) {
-        _themeMode = ThemeMode.dark;
-      } else if (_themeMode == ThemeMode.dark) {
-        _themeMode = ThemeMode.system;
-      } else {
-        _themeMode = ThemeMode.light;
-      }
-    });
-  }
-
-  IconData _getThemeIcon() {
-    switch (_themeMode) {
-      case ThemeMode.light:
-        return Icons.light_mode;
-      case ThemeMode.dark:
-        return Icons.dark_mode;
-      case ThemeMode.system:
-        return Icons.auto_mode;
-    }
-  }
-
-  String _getThemeTooltip() {
-    switch (_themeMode) {
-      case ThemeMode.light:
-        return 'Light Mode';
-      case ThemeMode.dark:
-        return 'Dark Mode';
-      case ThemeMode.system:
-        return 'System Theme';
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
-    return MaterialApp(
-      theme: ThemeData.light().copyWith(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
-        bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-          backgroundColor: Colors.black,
-          selectedItemColor: Colors.white,
-          unselectedItemColor: Colors.grey,
-        ),
-      ),
-      darkTheme: ThemeData.dark().copyWith(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.tealAccent),
-        bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-          backgroundColor: Colors.black,
-          selectedItemColor: Colors.tealAccent,
-          unselectedItemColor: Colors.grey,
-        ),
-      ),
-      themeMode: _themeMode,
-      home: Scaffold(
-        body: _screens[_selectedIndex],
-        bottomNavigationBar: BottomNavigationBar(
-          backgroundColor: Colors.black,
-          selectedItemColor: isDarkMode ? Colors.tealAccent : Colors.white,
-          unselectedItemColor: Colors.grey,
-          currentIndex: _selectedIndex,
-          onTap: _onItemTapped,
-          type: BottomNavigationBarType.fixed,
-          items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.kitchen),
-              label: 'Ingredients',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.restaurant),
-              label: 'Recipes',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.chat),
-              label: 'Assistant',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.menu_book),
-              label: 'Recipe Book',
-            ),
-          ],
-        ),
-        appBar: AppBar(
-          title: const Text('Food Assistant'),
-          actions: [
-            IconButton(
-              icon: Icon(_getThemeIcon()),
-              onPressed: _toggleTheme,
-              tooltip: _getThemeTooltip(),
-            ),
-          ],
-        ),
+    return Scaffold(
+      body: _screens[_selectedIndex],
+      bottomNavigationBar: BottomNavigationBar(
+        backgroundColor: isDarkMode ? Colors.black : Colors.deepPurple,
+        selectedItemColor: isDarkMode ? Colors.tealAccent : Colors.white,
+        unselectedItemColor: isDarkMode ? Colors.grey : Colors.grey[300],
+        currentIndex: _selectedIndex,
+        onTap: _onItemTapped,
+        type: BottomNavigationBarType.fixed,
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.kitchen),
+            label: 'Ingredients',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.restaurant),
+            label: 'Recipes',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.chat),
+            label: 'Assistant',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.menu_book),
+            label: 'Recipe Book',
+          ),
+        ],
       ),
     );
   }
