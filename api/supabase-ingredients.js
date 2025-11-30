@@ -19,7 +19,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    // PARSE JSON BODY
+    // PARSE JSON BODY - THIS IS THE FIX
     let body = req.body;
     if (typeof body === 'string') {
       try {
@@ -32,6 +32,7 @@ export default async function handler(req, res) {
       }
     }
 
+    // NOW safely destructure
     const { action, ...data } = body;
 
     if (!action) {
@@ -67,12 +68,8 @@ export default async function handler(req, res) {
   }
 }
 
-// ADD THIS MISSING FUNCTION
+// ADD THE MISSING getIngredients HANDLER FIRST
 async function handleGetIngredients(req, res, data) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
   const { userId } = data;
 
   if (!userId) {
@@ -85,7 +82,10 @@ async function handleGetIngredients(req, res, data) {
     .eq('user_id', userId)
     .order('created_at', { ascending: false });
 
-  if (error) throw error;
+  if (error) {
+    console.error('Supabase get ingredients error:', error);
+    throw error;
+  }
 
   res.status(200).json({
     success: true,
@@ -94,10 +94,6 @@ async function handleGetIngredients(req, res, data) {
 }
 
 async function handleAddIngredient(req, res, data) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
   const { name, category, unit, userId } = data;
 
   if (!name || !userId) {
@@ -124,10 +120,6 @@ async function handleAddIngredient(req, res, data) {
 }
 
 async function handleRemoveIngredient(req, res, data) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
   const { ingredientId, userId } = data;
 
   if (!ingredientId || !userId) {
@@ -148,13 +140,9 @@ async function handleRemoveIngredient(req, res, data) {
   });
 }
 
-// KEEP ONLY ONE VERSION OF THIS FUNCTION (THE ONE THAT HANDLES TAGS)
+// KEEP ONLY THE VERSION THAT HANDLES TAGS - REMOVE THE DUPLICATE AT THE BOTTOM
 async function handleUpdateIngredient(req, res, data) {
   const { ingredientId, userId, name, category, tags } = data;
-
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
 
   if (!ingredientId || !userId) {
     return res.status(400).json({ error: 'IngredientId and userId are required' });
@@ -187,10 +175,6 @@ async function handleUpdateIngredient(req, res, data) {
 }
 
 async function handleSearchIngredients(req, res, data) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
   const { query, userId } = data;
 
   if (!query || !userId) {
