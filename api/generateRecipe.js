@@ -32,20 +32,18 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Destructure with default values to avoid undefined errors
     const { 
       ingredients, 
       dietaryPreferences, 
       mealType, 
       cuisine, 
       model = 'google/gemini-flash-1.5',
-      preferredIngredients = [],  // Add default empty array
-      dislikedIngredients = []    // Add default empty array
+      preferredIngredients = [],
+      dislikedIngredients = []
     } = body;
 
     console.log('=== RECIPE GENERATION REQUEST ===');
     console.log('Ingredients:', ingredients);
-    console.log('Model:', model);
 
     if (!ingredients || !Array.isArray(ingredients) || ingredients.length === 0) {
       return res.status(400).json({ 
@@ -56,7 +54,6 @@ export default async function handler(req, res) {
 
     const openRouterConfig = getOpenRouterConfig();
     
-    // Check if API key is available
     if (!openRouterConfig.apiKey) {
       console.error('OpenRouter API key is missing');
       return res.status(500).json({
@@ -65,42 +62,47 @@ export default async function handler(req, res) {
       });
     }
 
-    console.log('OpenRouter config loaded, key length:', openRouterConfig.apiKey?.length);
-    
-    // Build the prompt
-    let prompt = `Create a delicious recipe using these main ingredients: ${ingredients.join(', ')}`;
+    // IMPROVED PROMPT - More explicit about JSON format
+    let prompt = `Create a recipe using these ingredients: ${ingredients.join(', ')}.`;
 
-    // Add optional filters - only if they have values
     if (cuisine && cuisine !== 'Any cuisine') {
-      prompt += `\nCuisine style: ${cuisine}`;
+      prompt += ` Make it a ${cuisine} style recipe.`;
     }
     if (mealType && mealType !== 'Time doesn\'t matter') {
-      prompt += `\nMeal type: ${mealType}`;
+      prompt += ` This should be a ${mealType.toLowerCase()} recipe.`;
     }
     if (dietaryPreferences) {
-      prompt += `\nDietary preferences: ${dietaryPreferences}`;
+      prompt += ` Follow these dietary preferences: ${dietaryPreferences}.`;
     }
     if (preferredIngredients && preferredIngredients.length > 0) {
-      prompt += `\nPreferred additional ingredients: ${preferredIngredients.join(', ')}`;
+      prompt += ` You can also use these preferred ingredients: ${preferredIngredients.join(', ')}.`;
     }
     if (dislikedIngredients && dislikedIngredients.length > 0) {
-      prompt += `\nIngredients to avoid: ${dislikedIngredients.join(', ')}`;
+      prompt += ` Avoid using these ingredients: ${dislikedIngredients.join(', ')}.`;
     }
 
-    prompt += `\n\nReturn ONLY valid JSON in this exact format (no other text, no markdown):\n{
+    // STRICTER JSON FORMAT INSTRUCTIONS
+    prompt += `
+
+IMPORTANT: You MUST return ONLY valid JSON, no other text. Use this exact format:
+
+{
   "title": "Recipe Name",
-  "description": "Brief description of the recipe",
+  "description": "Brief description",
   "ingredients": [
-    {"name": "ingredient1", "amount": "1 cup"},
-    {"name": "ingredient2", "amount": "2 tbsp"}
+    {"name": "ingredient1", "amount": "quantity"},
+    {"name": "ingredient2", "amount": "quantity"}
   ],
   "instructions": [
-    "Step 1 instruction",
-    "Step 2 instruction"
+    "Step 1",
+    "Step 2", 
+    "Step 3"
   ],
-  "cookingTime": "30 minutes",
-  "difficulty": "Easy"
-}`;
+  "cookingTime": "time estimate",
+  "difficulty": "Easy/Medium/Hard"
+}
+
+Do not include any explanations, notes, or text outside the JSON.`;
 
     console.log('Sending prompt to OpenRouter...');
 
@@ -116,12 +118,17 @@ export default async function handler(req, res) {
         model: model,
         messages: [
           {
+            role: 'system',
+            content: 'You are a recipe generator. Always respond with valid JSON only, no other text.'
+          },
+          {
             role: 'user',
             content: prompt
           }
         ],
-        max_tokens: 1500,
-        temperature: 0.7
+        max_tokens: 2000,
+        temperature: 0.3, // Lower temperature for more consistent JSON
+        response_format: { type: "json_object" } // Force JSON response
       })
     });
 
@@ -130,17 +137,7 @@ export default async function handler(req, res) {
     if (!response.ok) {
       const errorText = await response.text();
       console.error('OpenRouter API error:', response.status, errorText);
-      
-      let errorMessage = `OpenRouter API error: ${response.status}`;
-      if (response.status === 401) {
-        errorMessage = 'Invalid API key - check your OpenRouter configuration';
-      } else if (response.status === 429) {
-        errorMessage = 'Rate limit exceeded - try again later';
-      } else if (response.status === 404) {
-        errorMessage = 'Model not found - try a different model';
-      }
-      
-      throw new Error(errorMessage);
+      throw new Error(`OpenRouter API error: ${response.status}`);
     }
 
     const data = await response.json();
@@ -151,68 +148,74 @@ export default async function handler(req, res) {
     }
 
     const recipeContent = data.choices[0].message.content;
-    console.log('Raw AI response length:', recipeContent.length);
-    console.log('Raw AI response preview:', recipeContent.substring(0, 200) + '...');
+    console.log('Raw AI response:', recipeContent);
     
-    // Parse the JSON response with better error handling
+    // IMPROVED PARSING - More aggressive JSON extraction
     let recipe;
+    let jsonString = recipeContent.trim();
+    
+    // Remove any potential markdown or code blocks
+    jsonString = jsonString.replace(/```json\s*/g, '');
+    jsonString = jsonString.replace(/```\s*/g, '');
+    jsonString = jsonString.replace(/^JSON\s*:\s*/i, '');
+    
+    // Try multiple parsing strategies
     try {
-      // First try direct parse
-      recipe = JSON.parse(recipeContent);
+      // Strategy 1: Direct parse
+      recipe = JSON.parse(jsonString);
       console.log('Direct JSON parse successful');
-    } catch (parseError) {
-      console.log('Direct parse failed, trying to extract and clean JSON...');
-      console.log('Parse error:', parseError.message);
+    } catch (firstError) {
+      console.log('Direct parse failed, trying extraction...');
       
-      // More robust JSON extraction and cleaning
-      let jsonString = recipeContent;
-      
-      // Remove markdown code blocks
-      jsonString = jsonString.replace(/```json\s*/g, '');
-      jsonString = jsonString.replace(/```\s*/g, '');
-      
-      // Try to find JSON object
-      const jsonMatch = jsonString.match(/\{[\s\S]*\}/);
+      // Strategy 2: Extract JSON object
+      const jsonMatch = jsonString.match(/(\{[\s\S]*\})/);
       if (jsonMatch) {
-        jsonString = jsonMatch[0];
-        
-        // Clean common JSON issues
-        jsonString = jsonString
-          .replace(/,(\s*[}\]])/g, '$1') // Remove trailing commas
-          .replace(/'/g, '"') // Replace single quotes with double quotes
-          .replace(/(\w+):/g, '"$1":') // Add quotes to unquoted keys
-          .replace(/,\s*}/g, '}') // Remove trailing commas before }
-          .replace(/,\s*]/g, ']'); // Remove trailing commas before ]
-        
         try {
-          recipe = JSON.parse(jsonString);
-          console.log('Cleaned JSON parse successful');
+          recipe = JSON.parse(jsonMatch[1]);
+          console.log('Extracted JSON parse successful');
         } catch (secondError) {
-          console.error('Cleaned JSON parse failed:', secondError.message);
-          console.log('Cleaned JSON string:', jsonString);
+          console.log('Extracted parse failed, trying manual cleanup...');
           
-          // Last resort: create a basic recipe from the response
-          recipe = createFallbackRecipe(recipeContent, ingredients);
-          console.log('Using fallback recipe');
+          // Strategy 3: Aggressive cleanup
+          let cleanedJson = jsonMatch[1]
+            .replace(/,(\s*[}\]])/g, '$1') // Remove trailing commas
+            .replace(/'/g, '"') // Replace single quotes
+            .replace(/(\w+):/g, '"$1":') // Quote unquoted keys
+            .replace(/,\s*}/g, '}')
+            .replace(/,\s*]/g, ']');
+            
+          try {
+            recipe = JSON.parse(cleanedJson);
+            console.log('Cleaned JSON parse successful');
+          } catch (thirdError) {
+            console.error('All JSON parsing attempts failed');
+            console.log('Original content:', recipeContent);
+            console.log('Cleaned content:', cleanedJson);
+            throw new Error('AI returned unparseable JSON format');
+          }
         }
       } else {
         console.error('No JSON object found in response');
-        recipe = createFallbackRecipe(recipeContent, ingredients);
-        console.log('Using fallback recipe');
+        console.log('Full response:', recipeContent);
+        throw new Error('AI response does not contain valid JSON');
       }
     }
 
-    // Validate required fields and provide defaults
-    if (!recipe.title) recipe.title = "Generated Recipe";
+    // Validate and ensure all required fields
+    if (!recipe.title) recipe.title = `Recipe with ${ingredients.join(', ')}`;
+    if (!recipe.description) recipe.description = "A delicious recipe created for you.";
     if (!recipe.ingredients || !Array.isArray(recipe.ingredients)) {
       recipe.ingredients = ingredients.map(ing => ({ name: ing, amount: "to taste" }));
     }
     if (!recipe.instructions || !Array.isArray(recipe.instructions)) {
-      recipe.instructions = ["Mix all ingredients together and cook until done."];
+      recipe.instructions = [
+        "Combine all ingredients in a mixing bowl.",
+        "Cook according to your preferred method.",
+        "Season to taste and serve."
+      ];
     }
-    if (!recipe.description) recipe.description = "A delicious recipe created based on your ingredients.";
-    if (!recipe.cookingTime) recipe.cookingTime = "30 minutes";
-    if (!recipe.difficulty) recipe.difficulty = "Easy";
+    if (!recipe.cookingTime) recipe.cookingTime = "30-45 minutes";
+    if (!recipe.difficulty) recipe.difficulty = "Medium";
 
     console.log('Recipe generated successfully:', recipe.title);
 
@@ -225,29 +228,7 @@ export default async function handler(req, res) {
     console.error('Error generating recipe:', error);
     res.status(500).json({ 
       success: false,
-      error: 'Failed to generate recipe: ' + error.message 
+      error: error.message 
     });
   }
-}
-
-// Fallback function to create a basic recipe when JSON parsing fails
-function createFallbackRecipe(content, ingredients) {
-  // Try to extract title from content
-  let title = "Generated Recipe";
-  const titleMatch = content.match(/"title":\s*"([^"]*)"/) || content.match(/title":\s*"([^"]*)"/);
-  if (titleMatch) title = titleMatch[1];
-  
-  return {
-    title: title,
-    description: "A recipe created based on your available ingredients.",
-    ingredients: ingredients.map(ing => ({ name: ing, amount: "as needed" })),
-    instructions: [
-      "Combine all ingredients in a bowl.",
-      "Mix well until fully incorporated.",
-      "Cook according to your preferred method.",
-      "Serve and enjoy!"
-    ],
-    cookingTime: "30 minutes",
-    difficulty: "Easy"
-  };
 }
