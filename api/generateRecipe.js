@@ -38,6 +38,7 @@ export default async function handler(req, res) {
       mealType, 
       cuisine, 
       model, // Use the model from the request (from dropdown)
+      standardBases,
       preferredIngredients = [],
       dislikedIngredients = []
     } = body;
@@ -69,6 +70,9 @@ export default async function handler(req, res) {
     if (cuisine && cuisine !== 'Any cuisine') {
       prompt += ` Make it ${cuisine} style.`;
     }
+    if (standardBases && standardBases !== 'No preference (use any base)') {
+      prompt += ` You can use this as the standard base: ${standardBases}.`;
+    }
     if (mealType && mealType !== 'Time doesn\'t matter') {
       prompt += ` This should be a ${mealType.toLowerCase()} recipe.`;
     }
@@ -86,7 +90,7 @@ export default async function handler(req, res) {
 
 IMPORTANT INSTRUCTIONS:
 - Use ONLY ingredients from the provided list
-- You do NOT need to use all ingredients - choose 5-10 that work well together
+- You do NOT need to use all ingredients
 - Return ONLY valid JSON, no other text
 - JSON format:
 {
@@ -119,7 +123,7 @@ IMPORTANT INSTRUCTIONS:
         messages: [
           {
             role: 'system',
-            content: 'You are a recipe generator. You must use ONLY ingredients from the provided list. Choose 5-10 ingredients that work well together. Return valid JSON only.'
+            content: 'You are a recipe generator. You must use ONLY ingredients from the provided list. Return valid JSON only.'
           },
           {
             role: 'user',
