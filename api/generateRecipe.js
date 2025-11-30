@@ -38,7 +38,7 @@ export default async function handler(req, res) {
       mealType, 
       cuisine, 
       model, // Use the model from the request (from dropdown)
-      standardBases,
+      base, // Changed from standardBases to base to match your Flutter code
       preferredIngredients = [],
       dislikedIngredients = []
     } = body;
@@ -46,6 +46,7 @@ export default async function handler(req, res) {
     console.log('=== RECIPE GENERATION REQUEST ===');
     console.log('Ingredients:', ingredients);
     console.log('Selected model:', model);
+    console.log('Selected base:', base); // Log the base for debugging
 
     if (!ingredients || !Array.isArray(ingredients) || ingredients.length === 0) {
       return res.status(400).json({ 
@@ -70,8 +71,9 @@ export default async function handler(req, res) {
     if (cuisine && cuisine !== 'Any cuisine') {
       prompt += ` Make it ${cuisine} style.`;
     }
-    if (standardBases && standardBases !== 'No preference (use any base)') {
-      prompt += ` You can use this as the standard base: ${standardBases}.`;
+    // FIXED: Check if base exists and is not null/undefined
+    if (base && base !== 'No preference (use any base)' && base !== 'No specific base') {
+      prompt += ` Use ${base} as the main base ingredient.`;
     }
     if (mealType && mealType !== 'Time doesn\'t matter') {
       prompt += ` This should be a ${mealType.toLowerCase()} recipe.`;
@@ -169,7 +171,7 @@ IMPORTANT INSTRUCTIONS:
     // If we got cut off due to length, create a fallback
     if (data.choices[0].finish_reason === 'length' && (!recipeContent || recipeContent.length < 50)) {
       console.log('Response was cut off, creating fallback recipe');
-      const recipe = createFallbackRecipe(ingredients, cuisine, mealType);
+      const recipe = createFallbackRecipe(ingredients, cuisine, mealType, base);
       return res.status(200).json({
         success: true,
         recipe: recipe,
@@ -338,7 +340,7 @@ function createRecipeFromText(text, originalIngredients) {
   };
 }
 
-function createFallbackRecipe(ingredients, cuisine, mealType) {
+function createFallbackRecipe(ingredients, cuisine, mealType, base) {
   const cuisines = {
     'Brazilian': 'Brazilian Feijoada',
     'Italian': 'Italian Pasta',
@@ -349,9 +351,15 @@ function createFallbackRecipe(ingredients, cuisine, mealType) {
   };
   
   const baseTitle = cuisines[cuisine] || 'Delicious Dish';
+  let title = `${baseTitle} with ${ingredients.slice(0, 2).join(' and ')}`;
+  
+  // Include base in the title if provided
+  if (base && base !== 'No preference (use any base)' && base !== 'No specific base') {
+    title = `${baseTitle} with ${base} and ${ingredients.slice(0, 2).join(', ')}`;
+  }
   
   return {
-    title: `${baseTitle} with ${ingredients.slice(0, 2).join(' and ')}`,
+    title: title,
     description: `A ${cuisine || 'flavorful'} ${mealType ? mealType.toLowerCase() : 'meal'} created with your ingredients.`,
     ingredients: ingredients.slice(0, 6).map(ing => ({ name: ing, amount: "as needed" })),
     instructions: [
