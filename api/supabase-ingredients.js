@@ -19,7 +19,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    // PARSE JSON BODY - THIS IS THE FIX
+    // PARSE JSON BODY
     let body = req.body;
     if (typeof body === 'string') {
       try {
@@ -32,7 +32,6 @@ export default async function handler(req, res) {
       }
     }
 
-    // NOW safely destructure
     const { action, ...data } = body;
 
     if (!action) {
@@ -68,7 +67,7 @@ export default async function handler(req, res) {
   }
 }
 
-// KEEP ALL YOUR EXISTING HANDLER FUNCTIONS BELOW - DON'T CHANGE THEM
+// ADD THIS MISSING FUNCTION
 async function handleGetIngredients(req, res, data) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -84,7 +83,7 @@ async function handleGetIngredients(req, res, data) {
     .from('ingredients')
     .select('*')
     .eq('user_id', userId)
-    .order('name', { ascending: true });
+    .order('created_at', { ascending: false });
 
   if (error) throw error;
 
@@ -149,12 +148,13 @@ async function handleRemoveIngredient(req, res, data) {
   });
 }
 
+// KEEP ONLY ONE VERSION OF THIS FUNCTION (THE ONE THAT HANDLES TAGS)
 async function handleUpdateIngredient(req, res, data) {
+  const { ingredientId, userId, name, category, tags } = data;
+
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
-
-  const { ingredientId, userId, name, category } = data;
 
   if (!ingredientId || !userId) {
     return res.status(400).json({ error: 'IngredientId and userId are required' });
@@ -163,7 +163,10 @@ async function handleUpdateIngredient(req, res, data) {
   const updateData = {};
   if (name) updateData.name = name.toLowerCase().trim();
   if (category) updateData.category = category;
+  if (tags !== undefined) updateData.tags = tags; // Important: handle both empty and non-empty tags
   updateData.updated_at = new Date().toISOString();
+
+  console.log('Updating ingredient with tags:', tags); // Debug log
 
   const { data: result, error } = await supabase
     .from('ingredients')
@@ -172,7 +175,10 @@ async function handleUpdateIngredient(req, res, data) {
     .eq('user_id', userId)
     .select();
 
-  if (error) throw error;
+  if (error) {
+    console.error('Supabase update error:', error);
+    throw error;
+  }
 
   res.status(200).json({
     success: true,

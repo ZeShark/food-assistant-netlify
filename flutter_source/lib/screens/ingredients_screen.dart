@@ -13,6 +13,7 @@ class _IngredientsScreenState extends State<IngredientsScreen> {
   final TextEditingController _ingredientController = TextEditingController();
   final TextEditingController _searchController = TextEditingController();
   String _selectedCategory = 'vegetable';
+  String? _currentFilter;
   
   // Updated categories without frozen
   final List<String> categories = [
@@ -30,30 +31,112 @@ class _IngredientsScreenState extends State<IngredientsScreen> {
   }
 
   void _showSearchDialog() {
+    final TextEditingController searchController = TextEditingController();
+    String selectedCategory = 'All categories';
+    List<dynamic> filteredIngredients = [];
+    
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Search Ingredients'),
-        content: TextField(
-          controller: _searchController,
-          decoration: const InputDecoration(hintText: 'Search...'),
-          onChanged: (value) {
-            // You can implement search functionality here
-          },
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              // Implement search
-              Navigator.pop(context);
-            },
-            child: const Text('Search'),
-          ),
-        ],
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) {
+          void updateSearchResults() {
+            final appState = context.read<FoodAppState>();
+            final searchTerm = searchController.text.toLowerCase().trim();
+            
+            filteredIngredients = appState.ingredients.where((ingredient) {
+              final name = ingredient['name']?.toString().toLowerCase() ?? '';
+              final category = ingredient['category']?.toString().toLowerCase() ?? '';
+              final matchesName = name.contains(searchTerm);
+              final matchesCategory = selectedCategory == 'All categories' || 
+                                     category == selectedCategory.toLowerCase();
+              
+              return matchesName && matchesCategory;
+            }).toList();
+          }
+
+          // Initial filter
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            updateSearchResults();
+            setState(() {});
+          });
+
+          return AlertDialog(
+            title: const Text('Search Ingredients'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: searchController,
+                  decoration: const InputDecoration(
+                    hintText: 'Search by ingredient name...',
+                    border: OutlineInputBorder(),
+                  ),
+                  onChanged: (value) {
+                    updateSearchResults();
+                    setState(() {});
+                  },
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  value: selectedCategory,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Filter by Category',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: [
+                    'All categories',
+                    ...categories,
+                  ].map((category) => DropdownMenuItem(
+                    value: category,
+                    child: Text(category),
+                  )).toList(),
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() {
+                        selectedCategory = value;
+                      });
+                      updateSearchResults();
+                    }
+                  },
+                ),
+                const SizedBox(height: 16),
+                if (filteredIngredients.isNotEmpty) ...[
+                  const Text(
+                    'Search Results:',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    height: 200,
+                    child: ListView.builder(
+                      itemCount: filteredIngredients.length,
+                      itemBuilder: (context, index) {
+                        final ingredient = filteredIngredients[index];
+                        return ListTile(
+                          leading: getCategoryIcon(ingredient['category']),
+                          title: Text(ingredient['name']),
+                          subtitle: Text('Category: ${ingredient['category'] ?? 'uncategorized'}'),
+                        );
+                      },
+                    ),
+                  ),
+                ] else if (searchController.text.isNotEmpty || selectedCategory != 'All categories') ...[
+                  const Text(
+                    'No ingredients found',
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                ],
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -191,7 +274,7 @@ class _IngredientsScreenState extends State<IngredientsScreen> {
                 context.read<FoodAppState>().updateIngredient(
                   ingredient['id'].toString(),
                   name: newName,
-                  category: category, tags: [],
+                  category: category,
                 );
                 Navigator.pop(context);
               }
@@ -226,7 +309,7 @@ class _IngredientsScreenState extends State<IngredientsScreen> {
     );
   }
 
-  Widget _getCategoryIcon(String? category) {
+  Widget getCategoryIcon(String? category) {
     final cat = category?.toLowerCase() ?? 'uncategorized';
     switch (cat) {
       case 'vegetable': return const Icon(Icons.eco, color: Colors.green, size: 16);
@@ -246,6 +329,24 @@ class _IngredientsScreenState extends State<IngredientsScreen> {
     }
   }
 
+  void _filterByCategory(String category) {
+    setState(() {
+      _currentFilter = category == 'All' ? null : category;
+    });
+    
+    final appState = context.read<FoodAppState>();
+    final count = category == 'All' 
+        ? appState.ingredients.length 
+        : appState.ingredients.where((ing) => ing['category'] == category).length;
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Showing $count ingredients in $category'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -258,11 +359,34 @@ class _IngredientsScreenState extends State<IngredientsScreen> {
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<FoodAppState>();
+    
+    // Apply filter if active
+    final displayedIngredients = _currentFilter != null
+        ? appState.ingredients.where((ing) => ing['category'] == _currentFilter).toList()
+        : appState.ingredients;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('My Ingredients'),
         actions: [
+          // Category filter button
+          PopupMenuButton<String>(
+            onSelected: (category) {
+              _filterByCategory(category);
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'All',
+                child: Text('All Categories'),
+              ),
+              ...categories.map((category) => PopupMenuItem(
+                value: category,
+                child: Text(category),
+              )),
+            ],
+            icon: const Icon(Icons.filter_list),
+            tooltip: 'Filter by category',
+          ),
           IconButton(
             icon: const Icon(Icons.search),
             onPressed: _showSearchDialog,
@@ -326,9 +450,27 @@ class _IngredientsScreenState extends State<IngredientsScreen> {
             ),
           ),
 
+          // Show current filter
+          if (_currentFilter != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  Chip(
+                    label: Text('Filter: $_currentFilter'),
+                    onDeleted: () {
+                      setState(() {
+                        _currentFilter = null;
+                      });
+                    },
+                  ),
+                ],
+              ),
+            ),
+
           // Ingredients list - takes most space
           Expanded(
-            child: appState.ingredients.isEmpty
+            child: displayedIngredients.isEmpty
                 ? const Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -344,11 +486,11 @@ class _IngredientsScreenState extends State<IngredientsScreen> {
                     ),
                   )
                 : ListView.builder(
-                    itemCount: appState.ingredients.length,
+                    itemCount: displayedIngredients.length,
                     itemBuilder: (context, index) {
-                      final ingredient = appState.ingredients[index];
+                      final ingredient = displayedIngredients[index];
                       return ListTile(
-                        leading: _getCategoryIcon(ingredient['category']),
+                        leading: getCategoryIcon(ingredient['category']),
                         title: Text(ingredient['name']),
                         subtitle: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
