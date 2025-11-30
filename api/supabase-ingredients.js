@@ -103,7 +103,7 @@ async function handleAddIngredient(req, res, data) {
       category: category || 'other',
       unit: unit || 'unit',
       user_id: userId,
-      created_at: new Date().toISOString(),
+      addad_date: new Date().toISOString(),
     })
     .select();
 
