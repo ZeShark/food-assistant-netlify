@@ -152,40 +152,64 @@ export default async function handler(req, res) {
 
     const recipeContent = data.choices[0].message.content;
     console.log('Raw AI response length:', recipeContent.length);
+    console.log('Raw AI response preview:', recipeContent.substring(0, 200) + '...');
     
-    // Parse the JSON response
+    // Parse the JSON response with better error handling
     let recipe;
     try {
       // First try direct parse
       recipe = JSON.parse(recipeContent);
       console.log('Direct JSON parse successful');
     } catch (parseError) {
-      console.log('Direct parse failed, trying to extract JSON...');
+      console.log('Direct parse failed, trying to extract and clean JSON...');
+      console.log('Parse error:', parseError.message);
       
-      // Try to extract JSON from various formats
-      const jsonMatch = recipeContent.match(/```json\n?([\s\S]*?)\n?```/) || 
-                       recipeContent.match(/```\n?([\s\S]*?)\n?```/) ||
-                       recipeContent.match(/\{[\s\S]*\}/);
+      // More robust JSON extraction and cleaning
+      let jsonString = recipeContent;
       
+      // Remove markdown code blocks
+      jsonString = jsonString.replace(/```json\s*/g, '');
+      jsonString = jsonString.replace(/```\s*/g, '');
+      
+      // Try to find JSON object
+      const jsonMatch = jsonString.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
-        const jsonString = jsonMatch[1] || jsonMatch[0];
+        jsonString = jsonMatch[0];
+        
+        // Clean common JSON issues
+        jsonString = jsonString
+          .replace(/,(\s*[}\]])/g, '$1') // Remove trailing commas
+          .replace(/'/g, '"') // Replace single quotes with double quotes
+          .replace(/(\w+):/g, '"$1":') // Add quotes to unquoted keys
+          .replace(/,\s*}/g, '}') // Remove trailing commas before }
+          .replace(/,\s*]/g, ']'); // Remove trailing commas before ]
+        
         try {
           recipe = JSON.parse(jsonString);
-          console.log('Extracted JSON parse successful');
+          console.log('Cleaned JSON parse successful');
         } catch (secondError) {
-          console.error('Extracted JSON parse failed:', secondError);
-          throw new Error('AI returned invalid JSON format');
+          console.error('Cleaned JSON parse failed:', secondError.message);
+          console.log('Cleaned JSON string:', jsonString);
+          
+          // Last resort: create a basic recipe from the response
+          recipe = createFallbackRecipe(recipeContent, ingredients);
+          console.log('Using fallback recipe');
         }
       } else {
-        console.error('No JSON found in response');
-        throw new Error('AI response does not contain valid JSON');
+        console.error('No JSON object found in response');
+        recipe = createFallbackRecipe(recipeContent, ingredients);
+        console.log('Using fallback recipe');
       }
     }
 
     // Validate required fields and provide defaults
     if (!recipe.title) recipe.title = "Generated Recipe";
-    if (!recipe.ingredients) recipe.ingredients = [];
-    if (!recipe.instructions) recipe.instructions = ["Mix ingredients and cook as desired."];
+    if (!recipe.ingredients || !Array.isArray(recipe.ingredients)) {
+      recipe.ingredients = ingredients.map(ing => ({ name: ing, amount: "to taste" }));
+    }
+    if (!recipe.instructions || !Array.isArray(recipe.instructions)) {
+      recipe.instructions = ["Mix all ingredients together and cook until done."];
+    }
     if (!recipe.description) recipe.description = "A delicious recipe created based on your ingredients.";
     if (!recipe.cookingTime) recipe.cookingTime = "30 minutes";
     if (!recipe.difficulty) recipe.difficulty = "Easy";
@@ -204,4 +228,26 @@ export default async function handler(req, res) {
       error: 'Failed to generate recipe: ' + error.message 
     });
   }
+}
+
+// Fallback function to create a basic recipe when JSON parsing fails
+function createFallbackRecipe(content, ingredients) {
+  // Try to extract title from content
+  let title = "Generated Recipe";
+  const titleMatch = content.match(/"title":\s*"([^"]*)"/) || content.match(/title":\s*"([^"]*)"/);
+  if (titleMatch) title = titleMatch[1];
+  
+  return {
+    title: title,
+    description: "A recipe created based on your available ingredients.",
+    ingredients: ingredients.map(ing => ({ name: ing, amount: "as needed" })),
+    instructions: [
+      "Combine all ingredients in a bowl.",
+      "Mix well until fully incorporated.",
+      "Cook according to your preferred method.",
+      "Serve and enjoy!"
+    ],
+    cookingTime: "30 minutes",
+    difficulty: "Easy"
+  };
 }
