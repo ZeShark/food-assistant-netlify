@@ -19,7 +19,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    // PARSE JSON BODY - THIS IS THE FIX
+    // PARSE JSON BODY
     let body = req.body;
     if (typeof body === 'string') {
       try {
@@ -32,7 +32,6 @@ export default async function handler(req, res) {
       }
     }
 
-    // NOW safely destructure
     const { action, ...data } = body;
 
     if (!action) {
@@ -68,13 +67,81 @@ export default async function handler(req, res) {
   }
 }
 
-// KEEP ALL YOUR EXISTING HANDLER FUNCTIONS BELOW - DON'T CHANGE THEM
+// ADD THE MISSING FUNCTION
+async function handleGetIngredients(req, res, data) {
+  const { userId } = data;
+
+  if (!userId) {
+    return res.status(400).json({ error: 'UserId is required' });
+  }
+
+  const { data: result, error } = await supabase
+    .from('ingredients')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Supabase get ingredients error:', error);
+    throw error;
+  }
+
+  res.status(200).json({
+    success: true,
+    ingredients: result || [],
+  });
+}
+
+async function handleAddIngredient(req, res, data) {
+  const { name, category, unit, userId } = data;
+
+  if (!name || !userId) {
+    return res.status(400).json({ error: 'Name and userId are required' });
+  }
+
+  const { data: result, error } = await supabase
+    .from('ingredients')
+    .insert({
+      name: name.toLowerCase().trim(),
+      category: category || 'other',
+      unit: unit || 'unit',
+      user_id: userId,
+      created_at: new Date().toISOString(),
+    })
+    .select();
+
+  if (error) throw error;
+
+  res.status(200).json({
+    success: true,
+    ingredient: result[0],
+  });
+}
+
+async function handleRemoveIngredient(req, res, data) {
+  const { ingredientId, userId } = data;
+
+  if (!ingredientId || !userId) {
+    return res.status(400).json({ error: 'IngredientId and userId are required' });
+  }
+
+  const { error } = await supabase
+    .from('ingredients')
+    .delete()
+    .eq('id', ingredientId)
+    .eq('user_id', userId);
+
+  if (error) throw error;
+
+  res.status(200).json({
+    success: true,
+    message: 'Ingredient removed successfully',
+  });
+}
+
+// KEEP ONLY ONE VERSION OF THIS FUNCTION (THE ONE THAT HANDLES TAGS)
 async function handleUpdateIngredient(req, res, data) {
   const { ingredientId, userId, name, category, tags } = data;
-
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
 
   if (!ingredientId || !userId) {
     return res.status(400).json({ error: 'IngredientId and userId are required' });
@@ -106,66 +173,7 @@ async function handleUpdateIngredient(req, res, data) {
   });
 }
 
-async function handleAddIngredient(req, res, data) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
-  const { name, category, unit, userId } = data;
-
-  if (!name || !userId) {
-    return res.status(400).json({ error: 'Name and userId are required' });
-  }
-
-  const { data: result, error } = await supabase
-    .from('ingredients')
-    .insert({
-      name: name.toLowerCase().trim(),
-      category: category || 'other',
-      unit: unit || 'unit',
-      user_id: userId,
-      created_at: new Date().toISOString(),
-    })
-    .select();
-
-  if (error) throw error;
-
-  res.status(200).json({
-    success: true,
-    ingredient: result[0],
-  });
-}
-
-async function handleRemoveIngredient(req, res, data) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
-  const { ingredientId, userId } = data;
-
-  if (!ingredientId || !userId) {
-    return res.status(400).json({ error: 'IngredientId and userId are required' });
-  }
-
-  const { error } = await supabase
-    .from('ingredients')
-    .delete()
-    .eq('id', ingredientId)
-    .eq('user_id', userId);
-
-  if (error) throw error;
-
-  res.status(200).json({
-    success: true,
-    message: 'Ingredient removed successfully',
-  });
-}
-
 async function handleSearchIngredients(req, res, data) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
   const { query, userId } = data;
 
   if (!query || !userId) {
@@ -178,32 +186,6 @@ async function handleSearchIngredients(req, res, data) {
     .ilike('name', `%${query}%`)
     .eq('user_id', userId)
     .order('name', { ascending: true });
-
-  if (error) throw error;
-
-  res.status(200).json({
-    success: true,
-    ingredients: result || [],
-  });
-}
-
-// ADD THE MISSING getIngredients FUNCTION - PUT IT AT THE END SO WE DON'T DISRUPT ANYTHING
-async function handleGetIngredients(req, res, data) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
-  const { userId } = data;
-
-  if (!userId) {
-    return res.status(400).json({ error: 'UserId is required' });
-  }
-
-  const { data: result, error } = await supabase
-    .from('ingredients')
-    .select('*')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false });
 
   if (error) throw error;
 
