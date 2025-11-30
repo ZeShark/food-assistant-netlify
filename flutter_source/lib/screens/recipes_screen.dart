@@ -25,7 +25,7 @@ class _EnhancedRecipesScreenState extends State<EnhancedRecipesScreen> {
   
   final List<String> times = [
     'Quick (under 30 min)', 'Medium (30-60 min)', 'Long (1-2 hours)',
-    'Time doesn\'t matter', 'Very quick (under 15 min)'
+    'Time doesn\'t matter', 'Very quick (under 15 min)', 'Over 2 hours', 'All day cooking'
   ];
 
   final Map<String, bool> _appliances = {
@@ -52,8 +52,7 @@ class _EnhancedRecipesScreenState extends State<EnhancedRecipesScreen> {
     }).map((ingredient) => ingredient['name'].toString()).toList();
 
     final standardBases = [
-      'Rice', 'Pasta', 'Bread', 'Potatoes', 'Quinoa', 'Couscous',
-      'Lentils', 'Beans', 'Noodles', 'Tortillas', 'Lettuce', 'No specific base'
+     'No specific base'
     ];
 
     // Combine available meat/poultry with standard bases

@@ -1,9 +1,86 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'dart:js' as js;
 import '../app_state.dart';
 
-class RecipeBookScreen extends StatelessWidget {
+class RecipeBookScreen extends StatefulWidget {
   const RecipeBookScreen({super.key});
+
+  @override
+  State<RecipeBookScreen> createState() => _RecipeBookScreenState();
+}
+
+class _RecipeBookScreenState extends State<RecipeBookScreen> {
+  bool _showInstallButton = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkPwaInstallable();
+  }
+
+  void _checkPwaInstallable() {
+    // Check if PWA install is available using the global function
+    try {
+      final isAvailable = js.context.callMethod('getPwaInstallStatus');
+      setState(() {
+        _showInstallButton = isAvailable ?? false;
+      });
+    } catch (e) {
+      print('PWA check error: $e');
+      // Fallback: check if deferredPrompt exists
+      try {
+        final hasPrompt = js.context.hasProperty('deferredPrompt');
+        setState(() {
+          _showInstallButton = hasPrompt;
+        });
+      } catch (e) {
+        print('Fallback PWA check also failed: $e');
+      }
+    }
+  }
+
+  Future<void> _installPwa() async {
+    try {
+      js.context.callMethod('installPwa');
+      // Hide button after installation attempt
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted) {
+          setState(() => _showInstallButton = false);
+        }
+      });
+    } catch (e) {
+      _showInstallInstructions();
+    }
+  }
+
+  void _showInstallInstructions() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Install Food Assistant'),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('To install this app:'),
+            SizedBox(height: 12),
+            Text('• Android/Chrome: Tap ⋮ → "Add to Home screen"'),
+            Text('• iOS/Safari: Tap ⎕ → "Add to Home Screen"'),
+            Text('• Desktop: Look for install icon in address bar'),
+            SizedBox(height: 12),
+            Text('This will add the app to your home screen for quick access!'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Got it!'),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -12,6 +89,15 @@ class RecipeBookScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('My Recipe Book'),
+        actions: [
+          // Install App Button - Only show if PWA is available
+          if (_showInstallButton)
+            IconButton(
+              icon: const Icon(Icons.download, color: Colors.green),
+              tooltip: 'Install App',
+              onPressed: _installPwa,
+            ),
+        ],
       ),
       body: appState.savedRecipes.isEmpty
           ? const Center(
