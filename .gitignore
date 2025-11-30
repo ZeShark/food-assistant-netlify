@@ -3,7 +3,7 @@
 .packages
 .pub-cache/
 .pub/
-build/
+
 .flutter-plugins
 .flutter-plugins-dependencies
 .fvm/
@@ -99,6 +99,3 @@ food_assistant.db
 *.db
 *.sqlite
 *.sqlite3
-
-# Build outputs (handled by manual copy to public/)
-flutter_source/build/
