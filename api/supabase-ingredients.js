@@ -67,7 +67,7 @@ export default async function handler(req, res) {
   }
 }
 
-// ADD THE MISSING FUNCTION
+// ADD THIS MISSING FUNCTION - THIS WAS THE PROBLEM
 async function handleGetIngredients(req, res, data) {
   const { userId } = data;
 
@@ -79,12 +79,9 @@ async function handleGetIngredients(req, res, data) {
     .from('ingredients')
     .select('*')
     .eq('user_id', userId)
-    .order('created_at', { ascending: false });
+    .order('name', { ascending: true });
 
-  if (error) {
-    console.error('Supabase get ingredients error:', error);
-    throw error;
-  }
+  if (error) throw error;
 
   res.status(200).json({
     success: true,
@@ -139,9 +136,8 @@ async function handleRemoveIngredient(req, res, data) {
   });
 }
 
-// KEEP ONLY ONE VERSION OF THIS FUNCTION (THE ONE THAT HANDLES TAGS)
 async function handleUpdateIngredient(req, res, data) {
-  const { ingredientId, userId, name, category, tags } = data;
+  const { ingredientId, userId, name, category } = data;
 
   if (!ingredientId || !userId) {
     return res.status(400).json({ error: 'IngredientId and userId are required' });
@@ -150,10 +146,7 @@ async function handleUpdateIngredient(req, res, data) {
   const updateData = {};
   if (name) updateData.name = name.toLowerCase().trim();
   if (category) updateData.category = category;
-  if (tags !== undefined) updateData.tags = tags; // Important: handle both empty and non-empty tags
   updateData.updated_at = new Date().toISOString();
-
-  console.log('Updating ingredient with tags:', tags); // Debug log
 
   const { data: result, error } = await supabase
     .from('ingredients')
@@ -162,10 +155,7 @@ async function handleUpdateIngredient(req, res, data) {
     .eq('user_id', userId)
     .select();
 
-  if (error) {
-    console.error('Supabase update error:', error);
-    throw error;
-  }
+  if (error) throw error;
 
   res.status(200).json({
     success: true,
