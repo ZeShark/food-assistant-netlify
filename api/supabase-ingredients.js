@@ -147,7 +147,6 @@ async function handleUpdateIngredient(req, res, data) {
   if (name) updateData.name = name.toLowerCase().trim();
   if (category) updateData.category = category;
   if (tags !== undefined) updateData.tags = tags; // ← ADD TAGS HANDLING
-  updateData.updated_at = new Date().toISOString();
 
   console.log('Updating ingredient:', { ingredientId, updateData }); // Debug log
 
