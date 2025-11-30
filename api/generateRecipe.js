@@ -62,49 +62,23 @@ export default async function handler(req, res) {
       });
     }
 
-    // IMPROVED PROMPT - More explicit about JSON format
-    let prompt = `Create a recipe using these ingredients: ${ingredients.join(', ')}.`;
+    // SIMPLER PROMPT - Less complex instructions
+    let prompt = `Create a recipe using: ${ingredients.join(', ')}.`;
 
     if (cuisine && cuisine !== 'Any cuisine') {
-      prompt += ` Make it a ${cuisine} style recipe.`;
+      prompt += ` Cuisine: ${cuisine}.`;
     }
     if (mealType && mealType !== 'Time doesn\'t matter') {
-      prompt += ` This should be a ${mealType.toLowerCase()} recipe.`;
+      prompt += ` Meal type: ${mealType}.`;
     }
     if (dietaryPreferences) {
-      prompt += ` Follow these dietary preferences: ${dietaryPreferences}.`;
-    }
-    if (preferredIngredients && preferredIngredients.length > 0) {
-      prompt += ` You can also use these preferred ingredients: ${preferredIngredients.join(', ')}.`;
-    }
-    if (dislikedIngredients && dislikedIngredients.length > 0) {
-      prompt += ` Avoid using these ingredients: ${dislikedIngredients.join(', ')}.`;
+      prompt += ` Dietary: ${dietaryPreferences}.`;
     }
 
-    // STRICTER JSON FORMAT INSTRUCTIONS
-    prompt += `
-
-IMPORTANT: You MUST return ONLY valid JSON, no other text. Use this exact format:
-
-{
-  "title": "Recipe Name",
-  "description": "Brief description",
-  "ingredients": [
-    {"name": "ingredient1", "amount": "quantity"},
-    {"name": "ingredient2", "amount": "quantity"}
-  ],
-  "instructions": [
-    "Step 1",
-    "Step 2", 
-    "Step 3"
-  ],
-  "cookingTime": "time estimate",
-  "difficulty": "Easy/Medium/Hard"
-}
-
-Do not include any explanations, notes, or text outside the JSON.`;
+    prompt += ` Return ONLY JSON with title, description, ingredients array, instructions array, cookingTime, and difficulty.`;
 
     console.log('Sending prompt to OpenRouter...');
+    console.log('Prompt:', prompt);
 
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
@@ -119,16 +93,16 @@ Do not include any explanations, notes, or text outside the JSON.`;
         messages: [
           {
             role: 'system',
-            content: 'You are a recipe generator. Always respond with valid JSON only, no other text.'
+            content: 'You are a recipe generator. Respond with valid JSON only.'
           },
           {
             role: 'user',
             content: prompt
           }
         ],
-        max_tokens: 2000,
-        temperature: 0.3, // Lower temperature for more consistent JSON
-        response_format: { type: "json_object" } // Force JSON response
+        max_tokens: 1500,
+        temperature: 0.7
+        // Removed response_format as it might not be supported by all models
       })
     });
 
@@ -141,83 +115,21 @@ Do not include any explanations, notes, or text outside the JSON.`;
     }
 
     const data = await response.json();
-    console.log('OpenRouter response received');
+    console.log('OpenRouter full response:', JSON.stringify(data, null, 2));
     
     if (!data.choices || !data.choices[0] || !data.choices[0].message) {
       throw new Error('Invalid response format from OpenRouter API');
     }
 
     const recipeContent = data.choices[0].message.content;
-    console.log('Raw AI response:', recipeContent);
+    console.log('=== RAW AI RESPONSE ===');
+    console.log(recipeContent);
+    console.log('=== END RAW RESPONSE ===');
     
-    // IMPROVED PARSING - More aggressive JSON extraction
-    let recipe;
-    let jsonString = recipeContent.trim();
+    // Try to parse or create recipe from response
+    let recipe = parseRecipeResponse(recipeContent, ingredients);
     
-    // Remove any potential markdown or code blocks
-    jsonString = jsonString.replace(/```json\s*/g, '');
-    jsonString = jsonString.replace(/```\s*/g, '');
-    jsonString = jsonString.replace(/^JSON\s*:\s*/i, '');
-    
-    // Try multiple parsing strategies
-    try {
-      // Strategy 1: Direct parse
-      recipe = JSON.parse(jsonString);
-      console.log('Direct JSON parse successful');
-    } catch (firstError) {
-      console.log('Direct parse failed, trying extraction...');
-      
-      // Strategy 2: Extract JSON object
-      const jsonMatch = jsonString.match(/(\{[\s\S]*\})/);
-      if (jsonMatch) {
-        try {
-          recipe = JSON.parse(jsonMatch[1]);
-          console.log('Extracted JSON parse successful');
-        } catch (secondError) {
-          console.log('Extracted parse failed, trying manual cleanup...');
-          
-          // Strategy 3: Aggressive cleanup
-          let cleanedJson = jsonMatch[1]
-            .replace(/,(\s*[}\]])/g, '$1') // Remove trailing commas
-            .replace(/'/g, '"') // Replace single quotes
-            .replace(/(\w+):/g, '"$1":') // Quote unquoted keys
-            .replace(/,\s*}/g, '}')
-            .replace(/,\s*]/g, ']');
-            
-          try {
-            recipe = JSON.parse(cleanedJson);
-            console.log('Cleaned JSON parse successful');
-          } catch (thirdError) {
-            console.error('All JSON parsing attempts failed');
-            console.log('Original content:', recipeContent);
-            console.log('Cleaned content:', cleanedJson);
-            throw new Error('AI returned unparseable JSON format');
-          }
-        }
-      } else {
-        console.error('No JSON object found in response');
-        console.log('Full response:', recipeContent);
-        throw new Error('AI response does not contain valid JSON');
-      }
-    }
-
-    // Validate and ensure all required fields
-    if (!recipe.title) recipe.title = `Recipe with ${ingredients.join(', ')}`;
-    if (!recipe.description) recipe.description = "A delicious recipe created for you.";
-    if (!recipe.ingredients || !Array.isArray(recipe.ingredients)) {
-      recipe.ingredients = ingredients.map(ing => ({ name: ing, amount: "to taste" }));
-    }
-    if (!recipe.instructions || !Array.isArray(recipe.instructions)) {
-      recipe.instructions = [
-        "Combine all ingredients in a mixing bowl.",
-        "Cook according to your preferred method.",
-        "Season to taste and serve."
-      ];
-    }
-    if (!recipe.cookingTime) recipe.cookingTime = "30-45 minutes";
-    if (!recipe.difficulty) recipe.difficulty = "Medium";
-
-    console.log('Recipe generated successfully:', recipe.title);
+    console.log('Final recipe object:', JSON.stringify(recipe, null, 2));
 
     res.status(200).json({
       success: true,
@@ -231,4 +143,150 @@ Do not include any explanations, notes, or text outside the JSON.`;
       error: error.message 
     });
   }
+}
+
+function parseRecipeResponse(content, originalIngredients) {
+  console.log('Attempting to parse recipe response...');
+  
+  let cleanedContent = content.trim();
+  
+  // Try multiple parsing strategies
+  const strategies = [
+    // Strategy 1: Direct JSON parse
+    () => {
+      console.log('Trying direct JSON parse...');
+      return JSON.parse(cleanedContent);
+    },
+    
+    // Strategy 2: Extract JSON from markdown
+    () => {
+      console.log('Trying markdown extraction...');
+      const jsonMatch = cleanedContent.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[1].trim());
+      }
+      throw new Error('No markdown code block found');
+    },
+    
+    // Strategy 3: Find JSON object pattern
+    () => {
+      console.log('Trying JSON object extraction...');
+      const jsonMatch = cleanedContent.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        let jsonStr = jsonMatch[0];
+        // Clean common JSON issues
+        jsonStr = jsonStr
+          .replace(/,(\s*[}\]])/g, '$1')
+          .replace(/'/g, '"')
+          .replace(/([{\[,])\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g, '$1"$2":')
+          .replace(/:\s*'([^']*)'/g, ': "$1"');
+        return JSON.parse(jsonStr);
+      }
+      throw new Error('No JSON object pattern found');
+    }
+  ];
+
+  // Try each strategy
+  for (let i = 0; i < strategies.length; i++) {
+    try {
+      const result = strategies[i]();
+      console.log(`Strategy ${i + 1} successful!`);
+      return validateRecipe(result, originalIngredients);
+    } catch (error) {
+      console.log(`Strategy ${i + 1} failed:`, error.message);
+    }
+  }
+
+  // If all parsing fails, create a recipe from the text
+  console.log('All parsing failed, creating recipe from text...');
+  return createRecipeFromText(content, originalIngredients);
+}
+
+function validateRecipe(recipe, originalIngredients) {
+  // Ensure all required fields exist
+  if (!recipe.title) {
+    recipe.title = `Recipe with ${originalIngredients.join(', ')}`;
+  }
+  
+  if (!recipe.description) {
+    recipe.description = "A delicious recipe created based on your ingredients.";
+  }
+  
+  if (!recipe.ingredients || !Array.isArray(recipe.ingredients)) {
+    recipe.ingredients = originalIngredients.map(ing => ({ 
+      name: ing, 
+      amount: "as needed" 
+    }));
+  }
+  
+  if (!recipe.instructions || !Array.isArray(recipe.instructions)) {
+    recipe.instructions = [
+      "Combine all ingredients together.",
+      "Cook according to your preferred method.",
+      "Season to taste and serve."
+    ];
+  }
+  
+  if (!recipe.cookingTime) {
+    recipe.cookingTime = "30 minutes";
+  }
+  
+  if (!recipe.difficulty) {
+    recipe.difficulty = "Medium";
+  }
+  
+  return recipe;
+}
+
+function createRecipeFromText(text, originalIngredients) {
+  console.log('Creating fallback recipe from text...');
+  
+  // Try to extract information from the text
+  let title = "Generated Recipe";
+  let description = "A recipe created based on your ingredients.";
+  let instructions = [];
+  
+  // Try to find a title-like pattern
+  const titleMatch = text.match(/"title":\s*"([^"]*)"/) || 
+                    text.match(/title":\s*"([^"]*)"/) ||
+                    text.match(/Recipe: ([^\n\.]+)/i) ||
+                    text.match(/"([^"]*)" recipe/i);
+  
+  if (titleMatch) {
+    title = titleMatch[1] || titleMatch[0];
+  }
+  
+  // Try to find instructions
+  const instructionLines = text.split('\n').filter(line => 
+    line.match(/^\d+\./) || 
+    line.match(/^•/) ||
+    line.match(/^Step \d+/i) ||
+    (line.length > 20 && !line.match(/[{}":]/))
+  );
+  
+  if (instructionLines.length > 0) {
+    instructions = instructionLines.slice(0, 6).map(line => 
+      line.replace(/^\d+\.\s*/, '')
+          .replace(/^•\s*/, '')
+          .replace(/^Step \d+:\s*/i, '')
+          .trim()
+    );
+  }
+  
+  if (instructions.length === 0) {
+    instructions = [
+      "Mix all ingredients together in a bowl.",
+      "Cook using your preferred method until done.",
+      "Adjust seasoning and serve hot."
+    ];
+  }
+  
+  return {
+    title: title,
+    description: description,
+    ingredients: originalIngredients.map(ing => ({ name: ing, amount: "to taste" })),
+    instructions: instructions,
+    cookingTime: "30-45 minutes",
+    difficulty: "Medium"
+  };
 }
