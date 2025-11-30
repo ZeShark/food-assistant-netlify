@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <base href="/">
+  
+  <!-- PWA Meta Tags -->
+  <meta name="theme-color" content="#2196F3"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="manifest" href="manifest.json">
+  
+  <title>Food Assistant</title>
+  
+  <script>
+    // PWA install functionality
+    let deferredPrompt;
+    
+    window.addEventListener('beforeinstallprompt', (e) => {
+      console.log('PWA install available');
+      e.preventDefault();
+      deferredPrompt = e;
+      
+      // Notify Flutter that install is available
+      if (window.flutter_inappwebview) {
+        window.flutter_inappwebview.callHandler('pwaInstallAvailable');
+      }
+    });
+
+    function installPwa() {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        deferredPrompt.userChoice.then((choiceResult) => {
+          if (choiceResult.outcome === 'accepted') {
+            console.log('User accepted PWA installation');
+          } else {
+            console.log('User dismissed PWA installation');
+          }
+          deferredPrompt = null;
+        });
+      } else {
+        console.log('PWA install not available');
+      }
+    }
+
+    // Make functions globally available
+    window.installPwa = installPwa;
+    window.getPwaInstallStatus = () => !!deferredPrompt;
+  </script>
+</head>
+<body>
+  <script src="main.dart.js" type="application/javascript"></script>
+</body>
+</html>
