@@ -137,7 +137,7 @@ async function handleRemoveIngredient(req, res, data) {
 }
 
 async function handleUpdateIngredient(req, res, data) {
-  const { ingredientId, userId, name, category } = data;
+  const { ingredientId, userId, name, category, tags } = data; // ← ADD TAGS HERE
 
   if (!ingredientId || !userId) {
     return res.status(400).json({ error: 'IngredientId and userId are required' });
@@ -146,7 +146,10 @@ async function handleUpdateIngredient(req, res, data) {
   const updateData = {};
   if (name) updateData.name = name.toLowerCase().trim();
   if (category) updateData.category = category;
+  if (tags !== undefined) updateData.tags = tags; // ← ADD TAGS HANDLING
   updateData.updated_at = new Date().toISOString();
+
+  console.log('Updating ingredient:', { ingredientId, updateData }); // Debug log
 
   const { data: result, error } = await supabase
     .from('ingredients')
@@ -155,7 +158,10 @@ async function handleUpdateIngredient(req, res, data) {
     .eq('user_id', userId)
     .select();
 
-  if (error) throw error;
+  if (error) {
+    console.error('Supabase update error:', error);
+    throw error;
+  }
 
   res.status(200).json({
     success: true,
