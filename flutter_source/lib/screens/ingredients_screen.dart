@@ -14,11 +14,11 @@ class _IngredientsScreenState extends State<IngredientsScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _selectedCategory = 'vegetable';
   
-  // Define categories list
+  // Updated categories without frozen
   final List<String> categories = [
     'vegetable', 'fruit', 'meat', 'poultry', 'seafood', 'dairy',
     'grains', 'spices', 'herbs', 'oils', 'condiments', 'beverages',
-    'frozen', 'canned', 'bakery', 'snacks', 'other'
+    'canned', 'bakery', 'snacks', 'other'
   ];
 
   void _addIngredient() {
@@ -93,6 +93,61 @@ class _IngredientsScreenState extends State<IngredientsScreen> {
     );
   }
 
+  void _showTagsDialog(Map<String, dynamic> ingredient) {
+    bool isFrozen = ingredient['tags']?.contains('frozen') ?? false;
+    bool needsRefrigeration = ingredient['tags']?.contains('refrigerated') ?? false;
+    
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) {
+          return AlertDialog(
+            title: Text('Tags for ${ingredient['name']}'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CheckboxListTile(
+                  title: const Text('Frozen'),
+                  value: isFrozen,
+                  onChanged: (value) {
+                    setState(() => isFrozen = value ?? false);
+                  },
+                ),
+                CheckboxListTile(
+                  title: const Text('Refrigerated'),
+                  value: needsRefrigeration,
+                  onChanged: (value) {
+                    setState(() => needsRefrigeration = value ?? false);
+                  },
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () {
+                  List<String> tags = [];
+                  if (isFrozen) tags.add('frozen');
+                  if (needsRefrigeration) tags.add('refrigerated');
+                  
+                  context.read<FoodAppState>().updateIngredient(
+                    ingredient['id'].toString(),
+                    tags: tags,
+                  );
+                  Navigator.pop(context);
+                },
+                child: const Text('Save'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   void _showEditIngredientDialog(BuildContext context, Map<String, dynamic> ingredient) {
     final TextEditingController nameController = TextEditingController(text: ingredient['name']);
     String category = ingredient['category'] ?? 'other';
@@ -136,7 +191,7 @@ class _IngredientsScreenState extends State<IngredientsScreen> {
                 context.read<FoodAppState>().updateIngredient(
                   ingredient['id'].toString(),
                   name: newName,
-                  category: category,
+                  category: category, tags: [],
                 );
                 Navigator.pop(context);
               }
@@ -176,14 +231,14 @@ class _IngredientsScreenState extends State<IngredientsScreen> {
     switch (cat) {
       case 'vegetable': return const Icon(Icons.eco, color: Colors.green, size: 16);
       case 'fruit': return const Icon(Icons.apple, color: Colors.red, size: 16);
-      case 'meat': case 'poultry': return const Icon(Icons.set_meal, color: Colors.brown, size: 16);
+      case 'meat': return const Icon(Icons.set_meal, color: Colors.brown, size: 16);
+      case 'poultry': return const Icon(Icons.egg, color: Colors.orange, size: 16);
       case 'seafood': return const Icon(Icons.waves, color: Colors.blue, size: 16);
       case 'dairy': return const Icon(Icons.local_drink, color: Colors.yellow, size: 16);
       case 'grains': return const Icon(Icons.grain, color: Colors.orange, size: 16);
       case 'spices': case 'herbs': return const Icon(Icons.spa, color: Colors.purple, size: 16);
       case 'oils': case 'condiments': return const Icon(Icons.opacity, color: Colors.amber, size: 16);
       case 'beverages': return const Icon(Icons.local_cafe, color: Colors.brown, size: 16);
-      case 'frozen': return const Icon(Icons.ac_unit, color: Colors.blue, size: 16);
       case 'canned': return const Icon(Icons.inventory_2, color: Colors.orange, size: 16);
       case 'bakery': return const Icon(Icons.bakery_dining, color: Colors.brown, size: 16);
       case 'snacks': return const Icon(Icons.cookie, color: Colors.orange, size: 16);
@@ -295,10 +350,30 @@ class _IngredientsScreenState extends State<IngredientsScreen> {
                       return ListTile(
                         leading: _getCategoryIcon(ingredient['category']),
                         title: Text(ingredient['name']),
-                        subtitle: Text('Category: ${ingredient['category'] ?? 'uncategorized'}'),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Category: ${ingredient['category'] ?? 'uncategorized'}'),
+                            if (ingredient['tags'] != null && (ingredient['tags'] as List).isNotEmpty)
+                              Wrap(
+                                spacing: 4,
+                                children: (ingredient['tags'] as List).map<Widget>((tag) {
+                                  return Chip(
+                                    label: Text(tag),
+                                    visualDensity: VisualDensity.compact,
+                                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  );
+                                }).toList(),
+                              ),
+                          ],
+                        ),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
+                            IconButton(
+                              icon: const Icon(Icons.local_offer, size: 20),
+                              onPressed: () => _showTagsDialog(ingredient),
+                            ),
                             IconButton(
                               icon: const Icon(Icons.edit, size: 20),
                               onPressed: () => _showEditIngredientDialog(context, ingredient),

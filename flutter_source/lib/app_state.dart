@@ -33,21 +33,31 @@ class FoodAppState extends ChangeNotifier {
   };
   Map<String, dynamic> get tasteProfile => _tasteProfile;
 
+  // Custom cuisines and appliances
+  List<String> _customCuisines = [];
+  List<String> _customAppliances = [];
+
+  List<String> get customCuisines => _customCuisines;
+  List<String> get customAppliances => _customAppliances;
+
   // Available AI models
   final List<String> availableModels = [
-    'meta-llama/llama-3.1-8b-instruct:free',
-    'microsoft/wizardlm-2-8x22b',
-    'qwen/qwen-2.5-7b-instruct:free',
-    'anthropic/claude-3-haiku',
+    'openai/gpt-oss-20b:free',
+    'tngtech/tng-r1t-chimera:free',
+    'openrouter/bert-nebulon-alpha',
+    'x-ai/grok-4.1-fast:free',
+    'kwaipilot/kat-coder-pro:free',
   ];
   
-  String _selectedModel = 'meta-llama/llama-3.1-8b-instruct:free';
+  String _selectedModel = 'openai/gpt-oss-20b:free';
   String get selectedModel => _selectedModel;
 
   // Initialize from shared preferences
   FoodAppState() {
     _loadPreferences();
     loadRecipes(); // Load from Supabase on startup
+    loadCustomCuisines();
+    loadCustomAppliances();
   }
 
   // Load saved data
@@ -75,6 +85,18 @@ class FoodAppState extends ChangeNotifier {
     // Load selected model
     _selectedModel = prefs.getString('selectedModel') ?? 'meta-llama/llama-3.1-8b-instruct:free';
     
+    // Load custom cuisines
+    final customCuisinesJson = prefs.getString('customCuisines');
+    if (customCuisinesJson != null) {
+      _customCuisines = List<String>.from(json.decode(customCuisinesJson));
+    }
+    
+    // Load custom appliances
+    final customAppliancesJson = prefs.getString('customAppliances');
+    if (customAppliancesJson != null) {
+      _customAppliances = List<String>.from(json.decode(customAppliancesJson));
+    }
+    
     notifyListeners();
   }
 
@@ -85,6 +107,8 @@ class FoodAppState extends ChangeNotifier {
     await prefs.setString('currentRecipe', json.encode(_currentRecipe));
     await prefs.setString('tasteProfile', json.encode(_tasteProfile));
     await prefs.setString('selectedModel', _selectedModel);
+    await prefs.setString('customCuisines', json.encode(_customCuisines));
+    await prefs.setString('customAppliances', json.encode(_customAppliances));
   }
 
   void setSelectedModel(String model) {
@@ -196,6 +220,162 @@ class FoodAppState extends ChangeNotifier {
     }
   }
 
+  // Load custom cuisines from Supabase
+  Future<void> loadCustomCuisines() async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/supabase-custom-data'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'action': 'getCustomCuisines',
+          'userId': 'demo-user'
+        }),
+      );
+      
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        _customCuisines = List<String>.from(data['cuisines'] ?? []);
+        notifyListeners();
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error loading custom cuisines: $e');
+      }
+    }
+  }
+
+  // Load custom appliances from Supabase
+  Future<void> loadCustomAppliances() async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/supabase-custom-data'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'action': 'getCustomAppliances',
+          'userId': 'demo-user'
+        }),
+      );
+      
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        _customAppliances = List<String>.from(data['appliances'] ?? []);
+        notifyListeners();
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error loading custom appliances: $e');
+      }
+    }
+  }
+
+  // Add custom cuisine
+  Future<void> addCustomCuisine(String cuisine) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/supabase-custom-data'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'action': 'addCustomCuisine',
+          'userId': 'demo-user',
+          'name': cuisine
+        }),
+      );
+      
+      if (response.statusCode == 200) {
+        await loadCustomCuisines(); // Reload to get updated list
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error adding custom cuisine: $e');
+      }
+      // Fallback to local storage
+      _customCuisines.add(cuisine);
+      _savePreferences();
+      notifyListeners();
+    }
+  }
+
+  // Add custom appliance
+  Future<void> addCustomAppliance(String appliance) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/supabase-custom-data'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'action': 'addCustomAppliance',
+          'userId': 'demo-user',
+          'name': appliance
+        }),
+      );
+      
+      if (response.statusCode == 200) {
+        await loadCustomAppliances(); // Reload to get updated list
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error adding custom appliance: $e');
+      }
+      // Fallback to local storage
+      _customAppliances.add(appliance);
+      _savePreferences();
+      notifyListeners();
+    }
+  }
+
+  // Remove custom cuisine
+  Future<void> removeCustomCuisine(String cuisine) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/supabase-custom-data'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'action': 'removeCustomCuisine',
+          'userId': 'demo-user',
+          'name': cuisine
+        }),
+      );
+      
+      if (response.statusCode == 200) {
+        await loadCustomCuisines(); // Reload to get updated list
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error removing custom cuisine: $e');
+      }
+      // Fallback to local removal
+      _customCuisines.remove(cuisine);
+      _savePreferences();
+      notifyListeners();
+    }
+  }
+
+  // Remove custom appliance
+  Future<void> removeCustomAppliance(String appliance) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/supabase-custom-data'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'action': 'removeCustomAppliance',
+          'userId': 'demo-user',
+          'name': appliance
+        }),
+      );
+      
+      if (response.statusCode == 200) {
+        await loadCustomAppliances(); // Reload to get updated list
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error removing custom appliance: $e');
+      }
+      // Fallback to local removal
+      _customAppliances.remove(appliance);
+      _savePreferences();
+      notifyListeners();
+    }
+  }
+
   // Update taste profile
   void updateTasteProfile(Map<String, dynamic> updates) {
     _tasteProfile.addAll(updates);
@@ -276,7 +456,7 @@ class FoodAppState extends ChangeNotifier {
   }
 
   // Update ingredient
-  Future<void> updateIngredient(String id, {String? name, String? category, String? userId}) async {
+  Future<void> updateIngredient(String id, {String? name, String? category, String? userId, List<String>? tags}) async {
     try {
       // Update local state immediately for better UX
       final index = _ingredients.indexWhere((ing) => ing['id'].toString() == id);
@@ -284,6 +464,7 @@ class FoodAppState extends ChangeNotifier {
         final updatedIngredients = List<dynamic>.from(_ingredients);
         if (name != null) updatedIngredients[index]['name'] = name;
         if (category != null) updatedIngredients[index]['category'] = category;
+        if (tags != null) updatedIngredients[index]['tags'] = tags;
         
         _ingredients = updatedIngredients;
         notifyListeners();
@@ -299,6 +480,7 @@ class FoodAppState extends ChangeNotifier {
           'userId': userId ?? 'demo-user',
           if (name != null) 'name': name,
           if (category != null) 'category': category,
+          if (tags != null) 'tags': tags,
         }),
       );
       
@@ -390,6 +572,8 @@ class FoodAppState extends ChangeNotifier {
     String? time,
     List<String>? appliances,
     List<String>? ingredients,
+    String? base,
+    bool allowRandomBase = false,
     bool useTasteProfile = true,
   }) async {
     try {
@@ -401,6 +585,14 @@ class FoodAppState extends ChangeNotifier {
         'cuisine': cuisine,
         'model': _selectedModel,
       };
+
+      // Add optional parameters
+      if (base != null) {
+        requestBody['base'] = base;
+      }
+      if (allowRandomBase) {
+        requestBody['allowRandomBase'] = true;
+      }
 
       // Add taste profile data if available and enabled
       if (useTasteProfile && _tasteProfile['likedIngredients'].isNotEmpty) {

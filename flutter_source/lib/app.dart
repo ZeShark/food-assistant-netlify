@@ -126,7 +126,7 @@ class _MainScreenState extends State<MainScreen> {
 
   static const List<Widget> _screens = [
     IngredientsScreen(),
-    RecipesScreen(),
+    EnhancedRecipesScreen(),
     ChatScreen(),
     RecipeBookScreen(),
   ];
